@@ -881,4 +881,4 @@ if __name__ == "__main__":
     loop.create_task(send_price_updates())
 
     # Run the app with WebSocket support
-    socketio.run(app, debug=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=True, allow_unsafe_werkzeug=True, port=8080)

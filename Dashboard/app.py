@@ -877,4 +877,4 @@ def handle_connect():
 # Run the app
 if __name__ == "__main__":
     # For development use
-    socketio.run(app, debug=True, port=8080, host='0.0.0.0')
+    socketio.run(app, debug=True, port=8080, host='0.0.0.0', allow_unsafe_werkzeug=True)

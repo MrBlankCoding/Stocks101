@@ -876,9 +876,5 @@ def handle_connect():
 
 # Run the app
 if __name__ == "__main__":
-    # Set up asyncio event loop
-    loop = asyncio.get_event_loop()
-    loop.create_task(send_price_updates())
-
-    # Run the app with WebSocket support
-    socketio.run(app, debug=True, allow_unsafe_werkzeug=True, port=8080)
+    # For development use
+    socketio.run(app, debug=True, port=8080)

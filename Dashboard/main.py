@@ -5,17 +5,31 @@ from decimal import Decimal
 import logging
 import re
 from functools import wraps
-from typing import Dict, Optional, Union
-from functools import wraps
+from typing import Dict, Optional
 from asyncio import run
 import json
 
 import asyncio
-import aiohttp
 import yfinance as yf
-from bson import ObjectId, Decimal128
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from bson import ObjectId
+from bson.decimal128 import Decimal128
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    jsonify,
+)
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    login_user,
+    login_required,
+    logout_user,
+    current_user,
+)
 from polygon import RESTClient
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -41,8 +55,11 @@ app.config.update(
 # After your Flask app initialization
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'  # Specify what route to redirect to when login is required
-login_manager.login_message_category = 'info'
+login_manager.login_view = (
+    "login"  # Specify what route to redirect to when login is required
+)
+login_manager.login_message_category = "info"
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -51,11 +68,14 @@ def load_user(user_id):
         return User(user_data)
     return None
 
+
 def async_route(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         return run(f(*args, **kwargs))
+
     return decorated_function
+
 
 # MongoDB Setup with connection pooling and error handling
 class DatabaseManager:
@@ -88,7 +108,9 @@ class DatabaseManager:
         return self.db
 
 
-db_manager = DatabaseManager(os.getenv("DATABASE_URI"))  # Use DATABASE_URI from environment variable
+db_manager = DatabaseManager(
+    os.getenv("DATABASE_URI")
+)  # Use DATABASE_URI from environment variable
 mongo = db_manager.get_db()
 
 
@@ -122,7 +144,10 @@ class StockMarketService:
     async def get_stock_price(self, symbol: str) -> Optional[float]:
         cache_key = f"{symbol}_price"
         cached_data = self.cache.get(cache_key)
-        if cached_data and (datetime.now() - cached_data["timestamp"]).seconds < self.cache_timeout:
+        if (
+            cached_data
+            and (datetime.now() - cached_data["timestamp"]).seconds < self.cache_timeout
+        ):
             return cached_data["price"]
 
         try:
@@ -157,10 +182,18 @@ class StockMarketService:
             # Try to get details from Polygon first
             try:
                 ticker_details = self.polygon_client.get_ticker_details(symbol)
-                company_name = ticker_details.name if hasattr(ticker_details, 'name') else None
-                market_cap = ticker_details.market_cap if hasattr(ticker_details, 'market_cap') else None
+                company_name = (
+                    ticker_details.name if hasattr(ticker_details, "name") else None
+                )
+                market_cap = (
+                    ticker_details.market_cap
+                    if hasattr(ticker_details, "market_cap")
+                    else None
+                )
             except Exception as polygon_error:
-                logger.warning(f"Polygon API failed for ticker details {symbol}: {polygon_error}")
+                logger.warning(
+                    f"Polygon API failed for ticker details {symbol}: {polygon_error}"
+                )
                 company_name = None
                 market_cap = None
 
@@ -168,11 +201,11 @@ class StockMarketService:
             try:
                 stock = yf.Ticker(symbol)
                 info = stock.info
-                
+
                 # Use Polygon data if available, otherwise fall back to YFinance
                 company_name = company_name or info.get("longName", "")
                 market_cap = market_cap or info.get("marketCap", 0)
-                
+
                 stock_info = {
                     "symbol": symbol,
                     "price": price,
@@ -190,7 +223,7 @@ class StockMarketService:
                     "fifty_two_week_low": info.get("fiftyTwoWeekLow", 0),
                     "dividend_yield": info.get("dividendYield", 0),
                     "beta": info.get("beta", 0),
-                    "last_updated": datetime.now().isoformat()
+                    "last_updated": datetime.now().isoformat(),
                 }
 
                 # Get historical data for price chart
@@ -199,7 +232,7 @@ class StockMarketService:
                     {
                         "date": index.strftime("%Y-%m-%d"),
                         "price": float(row["Close"]),
-                        "volume": float(row["Volume"])
+                        "volume": float(row["Volume"]),
                     }
                     for index, row in hist.iterrows()
                 ]
@@ -215,7 +248,7 @@ class StockMarketService:
                     "price": price,
                     "company_name": company_name or symbol,
                     "market_cap": market_cap or 0,
-                    "last_updated": datetime.now().isoformat()
+                    "last_updated": datetime.now().isoformat(),
                 }
 
         except Exception as e:
@@ -230,7 +263,7 @@ class StockMarketService:
             return {
                 "is_market_open": market_status.market == "open",
                 "next_open": market_status.next_open,
-                "next_close": market_status.next_close
+                "next_close": market_status.next_close,
             }
         except Exception as e:
             logger.warning(f"Could not fetch market hours from Polygon: {e}")
@@ -242,8 +275,9 @@ class StockMarketService:
             return {
                 "is_market_open": is_weekday and market_open <= now <= market_close,
                 "next_open": market_open,
-                "next_close": market_close
+                "next_close": market_close,
             }
+
 
 # Create a JSON encoder that handles Decimal
 class CustomJSONEncoder(json.JSONEncoder):
@@ -258,11 +292,14 @@ class CustomJSONEncoder(json.JSONEncoder):
             return str(obj)
         return super().default(obj)
 
+
 # Update the Flask app configuration
 app.json_encoder = CustomJSONEncoder
 
 
-stock_service = StockMarketService(os.getenv("POLYGON_API_KEY"))  # Use POLYGON_API_KEY from environment variable
+stock_service = StockMarketService(
+    os.getenv("POLYGON_API_KEY")
+)  # Use POLYGON_API_KEY from environment variable
 
 
 # Custom decorators for error handling and validation
@@ -314,6 +351,7 @@ def validate_stock_input(f):
 
     return decorated_function
 
+
 # Enhanced routes with better error handling and validation
 @app.route("/register", methods=["GET", "POST"])
 @handle_errors
@@ -339,10 +377,8 @@ def register():
         mongo.users.insert_one(
             {
                 "email": email,
-                "password": generate_password_hash(
-                    password, method="pbkdf2:sha256"
-                ),
-                "balance": Decimal128("10000.00"),
+                "password": generate_password_hash(password, method="pbkdf2:sha256"),
+                "balance": Decimal128(Decimal("10000.00")),
                 "portfolio": {},
                 "trade_history": [],
                 "created_at": datetime.now(),
@@ -357,6 +393,7 @@ def register():
 
     return render_template("register.html")
 
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -370,17 +407,19 @@ def login():
             login_user(user, remember=remember)
             user.update_last_login()
             return redirect(url_for("dashboard"))
-        
+
         flash("Invalid email or password")
         return redirect(url_for("login"))
 
     return render_template("login.html")
+
 
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
     return redirect(url_for("login"))
+
 
 @app.route("/dashboard")
 @login_required
@@ -404,9 +443,7 @@ async def dashboard():
 
     stock_prices = await fetch_all_prices()
 
-    for (symbol, position), current_price in zip(
-        portfolio.items(), stock_prices
-    ):
+    for (symbol, position), current_price in zip(portfolio.items(), stock_prices):
         if position["shares"] > 0 and current_price:
             shares = Decimal(str(position["shares"]))
             avg_price = Decimal(str(position["avg_price"]))
@@ -438,9 +475,7 @@ async def dashboard():
 
     return render_template(
         "dashboard.html",
-        portfolio=sorted(
-            portfolio_data, key=lambda x: x["market_value"], reverse=True
-        ),
+        portfolio=sorted(portfolio_data, key=lambda x: x["market_value"], reverse=True),
         balance=balance,
         total_value=total_value,
         net_profit=net_profit,
@@ -450,6 +485,7 @@ async def dashboard():
         last_updated=datetime.now(),
         account_type=current_user.account_type,
     )
+
 
 @app.route("/buy_stock", methods=["POST"])
 @login_required
@@ -465,11 +501,15 @@ async def buy_stock():
 
     # Verify current price
     current_price = await stock_service.get_stock_price(symbol)
-    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal("0.02"):
-        return jsonify({
-            "success": False,
-            "error": "Price has changed significantly. Please refresh and try again."
-        })
+    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal(
+        "0.02"
+    ):
+        return jsonify(
+            {
+                "success": False,
+                "error": "Price has changed significantly. Please refresh and try again.",
+            }
+        )
 
     total_cost = shares * price
 
@@ -483,12 +523,17 @@ async def buy_stock():
                 return jsonify({"success": False, "error": "Insufficient funds"})
 
             portfolio = user_data.get("portfolio", {})
-            current_position = portfolio.get(symbol, {"shares": Decimal("0"), "avg_price": Decimal("0")})
+            current_position = portfolio.get(
+                symbol, {"shares": Decimal("0"), "avg_price": Decimal("0")}
+            )
 
             # Calculate new position
             total_shares = Decimal(str(current_position["shares"])) + shares
             new_avg_price = (
-                (Decimal(str(current_position["shares"])) * Decimal(str(current_position["avg_price"])))
+                (
+                    Decimal(str(current_position["shares"]))
+                    * Decimal(str(current_position["avg_price"]))
+                )
                 + (shares * price)
             ) / total_shares
 
@@ -498,11 +543,17 @@ async def buy_stock():
                 {
                     "$set": {
                         f"portfolio.{symbol}": {
-                            "shares": float(total_shares),  # Convert to float for MongoDB
-                            "avg_price": float(new_avg_price),  # Convert to float for MongoDB
+                            "shares": float(
+                                total_shares
+                            ),  # Convert to float for MongoDB
+                            "avg_price": float(
+                                new_avg_price
+                            ),  # Convert to float for MongoDB
                             "last_updated": datetime.now(),
                         },
-                        "balance": float(current_balance - total_cost),  # Convert to float for MongoDB
+                        "balance": float(
+                            current_balance - total_cost
+                        ),  # Convert to float for MongoDB
                     },
                     "$push": {
                         "trade_history": {
@@ -519,17 +570,20 @@ async def buy_stock():
                 session=session,
             )
 
-    return jsonify({
-        "success": True,
-        "new_balance": float(current_balance - total_cost),
-        "transaction": {
-            "type": "buy",
-            "symbol": symbol,
-            "shares": float(shares),
-            "price": float(price),
-            "total": float(total_cost),
+    return jsonify(
+        {
+            "success": True,
+            "new_balance": float(current_balance - total_cost),
+            "transaction": {
+                "type": "buy",
+                "symbol": symbol,
+                "shares": float(shares),
+                "price": float(price),
+                "total": float(total_cost),
+            },
         }
-    })
+    )
+
 
 @app.route("/sell_stock", methods=["POST"])
 @login_required
@@ -544,9 +598,9 @@ async def sell_stock():
 
     # Verify current price
     current_price = await stock_service.get_stock_price(symbol)
-    if not current_price or abs(
-        Decimal(str(current_price)) - price
-    ) / price > Decimal("0.02"):
+    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal(
+        "0.02"
+    ):
         return jsonify(
             {
                 "success": False,
@@ -559,15 +613,11 @@ async def sell_stock():
     # Use MongoDB transaction for atomicity
     with db_manager.client.start_session() as session:  # Use db_manager.client here
         with session.start_transaction():
-            user_data = mongo.users.find_one(
-                {"_id": ObjectId(current_user.get_id())}
-            )
+            user_data = mongo.users.find_one({"_id": ObjectId(current_user.get_id())})
             portfolio = user_data.get("portfolio", {})
 
             if symbol not in portfolio or portfolio[symbol]["shares"] < shares:
-                return jsonify(
-                    {"success": False, "error": "Insufficient shares"}
-                )
+                return jsonify({"success": False, "error": "Insufficient shares"})
 
             current_shares = Decimal(str(portfolio[symbol]["shares"]))
             new_shares = current_shares - shares
@@ -621,6 +671,7 @@ async def sell_stock():
         }
     )
 
+
 @app.route("/get_stock_info/<symbol>")
 @login_required
 @async_route
@@ -628,13 +679,15 @@ async def sell_stock():
 async def get_stock_info(symbol: str):
     symbol = symbol.upper()
     stock_info = await stock_service.get_stock_info(symbol)
-    
+
     if not stock_info:
-        return jsonify({
-            "success": False,
-            "error": f"Could not fetch information for {symbol}"
-        }), 404
-    
+        return (
+            jsonify(
+                {"success": False, "error": f"Could not fetch information for {symbol}"}
+            ),
+            404,
+        )
+
     return jsonify({**stock_info, "success": True})
 
 
@@ -672,13 +725,11 @@ async def portfolio_analysis():
                     stock = yf.Ticker(symbol)
                     sector = stock.info.get("sector", "Unknown")
                     sector_exposure[sector] = (
-                        sector_exposure.get(sector, Decimal("0"))
-                        + position_value
+                        sector_exposure.get(sector, Decimal("0")) + position_value
                     )
                 except Exception:
                     sector_exposure["Unknown"] = (
-                        sector_exposure.get("Unknown", Decimal("0"))
-                        + position_value
+                        sector_exposure.get("Unknown", Decimal("0")) + position_value
                     )
 
     # Calculate trading metrics
@@ -695,10 +746,7 @@ async def portfolio_analysis():
         ),
         "average_trade_size": (
             Decimal(
-                str(
-                    sum(trade["total"] for trade in trade_history)
-                    / len(trade_history)
-                )
+                str(sum(trade["total"] for trade in trade_history) / len(trade_history))
             )
             if trade_history
             else Decimal("0")
@@ -710,9 +758,7 @@ async def portfolio_analysis():
         total_value=float(total_value),
         total_cost=float(total_cost),
         total_return=(
-            float((total_value - total_cost) / total_cost * 100)
-            if total_cost
-            else 0
+            float((total_value - total_cost) / total_cost * 100) if total_cost else 0
         ),
         sector_exposure={k: float(v) for k, v in sector_exposure.items()},
         trades_analysis={
@@ -734,9 +780,7 @@ def trade_history():
     trade_history = user_data.get("trade_history", [])
 
     # Sort trades by timestamp (most recent first)
-    sorted_trades = sorted(
-        trade_history, key=lambda x: x["timestamp"], reverse=True
-    )
+    sorted_trades = sorted(trade_history, key=lambda x: x["timestamp"], reverse=True)
 
     # Implement pagination
     start_idx = (page - 1) * per_page
@@ -781,9 +825,7 @@ def rate_limit(f):
         if request_times:
             times = request_times["times"]
             # Remove timestamps older than 1 minute
-            times = [
-                t for t in times if (current_time - t).total_seconds() < 60
-            ]
+            times = [t for t in times if (current_time - t).total_seconds() < 60]
 
             if len(times) >= 100:
                 return jsonify({"error": "Rate limit exceeded"}), 429

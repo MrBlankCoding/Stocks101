@@ -1,10 +1,9 @@
 aiohttp
 yfinance
-bson
 pymongo
+bson
 flask
 flask_login
-polygon
 polygon-api-client
 flask_socketio
 python-dotenv

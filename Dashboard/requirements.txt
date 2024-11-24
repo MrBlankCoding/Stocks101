@@ -6,5 +6,4 @@ flask_login
 polygon-api-client
 flask_socketio
 python-dotenv
-gunicorn 
-eventlet
+scipy

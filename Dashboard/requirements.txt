@@ -7,5 +7,4 @@ polygon-api-client
 flask_socketio
 python-dotenv
 gunicorn 
-gevent 
-gevent-websocket
+eventlet

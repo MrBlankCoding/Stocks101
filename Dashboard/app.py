@@ -1,6 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
-
 from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta
@@ -880,4 +877,4 @@ def handle_connect():
 # Run the app
 if __name__ == "__main__":
     # For development use
-    socketio.run(app, debug=True, port=8080)
+    socketio.run(app, debug=True, port=8080, host='0.0.0.0')

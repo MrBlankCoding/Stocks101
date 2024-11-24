@@ -1,7 +1,6 @@
 aiohttp
 yfinance
 pymongo
-bson
 flask
 flask_login
 polygon-api-client

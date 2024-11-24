@@ -1,0 +1,10 @@
+aiohttp
+yfinance
+bson
+pymongo
+flask
+flask_login
+polygon
+polygon-api-client
+flask_socketio
+python-dotenv

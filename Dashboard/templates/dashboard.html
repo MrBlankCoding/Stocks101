@@ -1,0 +1,201 @@
+<!-- dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockDash - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-100">
+    <nav class="bg-blue-600 p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-white text-2xl font-bold">StockDash</h1>
+            <div class="flex items-center space-x-4">
+                <span class="text-white">Balance: $<span id="balance">{{ "%.2f"|format(balance) }}</span></span>
+                <a href="{{ url_for('dashboard') }}" class="text-white hover:text-blue-200">Dashboard</a>
+                <a href="{{ url_for('portfolio_analysis') }}" class="text-white hover:text-blue-200">Analysis</a>
+                <a href="{{ url_for('trade_history') }}" class="text-white hover:text-blue-200">History</a>
+                <a href="{{ url_for('logout') }}" class="text-white hover:text-blue-200">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-6">
+        <!-- Account Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-2">Total Portfolio Value</h3>
+                <p class="text-3xl font-bold text-blue-600">${{ "%.2f"|format(total_value) }}</p>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-2">Net Profit/Loss</h3>
+                <p class="text-3xl font-bold {{ 'text-green-600' if net_profit > 0 else 'text-red-600' }}">
+                    ${{ "%.2f"|format(net_profit) }} ({{ "%.2f"|format(net_profit_percent) }}%)
+                </p>
+            </div>
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-2">Cash Balance</h3>
+                <p class="text-3xl font-bold text-gray-700">${{ "%.2f"|format(balance) }}</p>
+            </div>
+        </div>
+
+        <!-- Trade Form -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Quick Trade</h2>
+            <div class="flex space-x-4 mb-4">
+                <input type="text" id="symbol" placeholder="Stock Symbol" class="border p-2 rounded">
+                <input type="number" id="shares" placeholder="Number of Shares" class="border p-2 rounded">
+                <button onclick="getStockInfo()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Get Quote</button>
+            </div>
+            <div id="stock-info" class="hidden mb-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-600">Company</p>
+                        <p id="company-name" class="font-semibold"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">Current Price</p>
+                        <p id="current-price" class="font-semibold"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">Market Cap</p>
+                        <p id="market-cap" class="font-semibold"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">P/E Ratio</p>
+                        <p id="pe-ratio" class="font-semibold"></p>
+                    </div>
+                </div>
+                <div class="flex space-x-4 mt-4">
+                    <button onclick="buyStock()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">Buy</button>
+                    <button onclick="sellStock()" class="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700">Sell</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portfolio Table -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <h2 class="text-xl font-semibold p-6 bg-gray-50">Current Portfolio</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shares</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Price</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Market Value</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit/Loss</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for position in portfolio %}
+                        <tr id="position-{{ position.symbol }}">
+                            <td class="px-6 py-4 whitespace-nowrap">{{ position.symbol }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">{{ "%.2f"|format(position.shares) }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">${{ "%.2f"|format(position.avg_price) }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap price-cell">${{ "%.2f"|format(position.current_price) }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">${{ "%.2f"|format(position.market_value) }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap {{ 'text-green-600' if position.profit_loss > 0 else 'text-red-600' }}">
+                                ${{ "%.2f"|format(position.profit_loss) }} ({{ "%.2f"|format(position.profit_loss_percent) }}%)
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        const socket = io();
+        
+        socket.on('price_updates', function(updates) {
+            for (const [symbol, price] of Object.entries(updates)) {
+                updatePrice(symbol, price);
+            }
+        });
+
+        function updatePrice(symbol, price) {
+            const row = document.getElementById(`position-${symbol}`);
+            if (row) {
+                const priceCell = row.querySelector('.price-cell');
+                if (priceCell) {
+                    const oldPrice = parseFloat(priceCell.textContent.replace('$', ''));
+                    priceCell.textContent = `$${price.toFixed(2)}`;
+                    
+                    // Add animation for price change
+                    priceCell.classList.add(price > oldPrice ? 'text-green-600' : 'text-red-600');
+                    setTimeout(() => {
+                        priceCell.classList.remove('text-green-600', 'text-red-600');
+                    }, 1000);
+                }
+            }
+        }
+
+        async function getStockInfo() {
+            const symbol = document.getElementById('symbol').value.toUpperCase();
+            const response = await fetch(`/get_stock_info/${symbol}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                document.getElementById('stock-info').classList.remove('hidden');
+                document.getElementById('company-name').textContent = data.company_name;
+                document.getElementById('current-price').textContent = `$${data.price.toFixed(2)}`;
+                document.getElementById('market-cap').textContent = `$${(data.market_cap / 1e9).toFixed(2)}B`;
+                document.getElementById('pe-ratio').textContent = data.pe_ratio.toFixed(2);
+            } else {
+                alert('Error fetching stock information');
+            }
+        }
+
+        async function buyStock() {
+            const symbol = document.getElementById('symbol').value.toUpperCase();
+            const shares = parseFloat(document.getElementById('shares').value);
+            const price = parseFloat(document.getElementById('current-price').textContent.replace('$', ''));
+            
+            const response = await fetch('/buy_stock', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ symbol, shares, price }),
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                document.getElementById('balance').textContent = data.new_balance.toFixed(2);
+                location.reload(); // Refresh to update portfolio
+            } else {
+                alert(data.error);
+            }
+        }
+
+        async function sellStock() {
+            const symbol = document.getElementById('symbol').value.toUpperCase();
+            const shares = parseFloat(document.getElementById('shares').value);
+            const price = parseFloat(document.getElementById('current-price').textContent.replace('$', ''));
+            
+            const response = await fetch('/sell_stock', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ symbol, shares, price }),
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                document.getElementById('balance').textContent = data.new_balance.toFixed(2);
+                location.reload(); // Refresh to update portfolio
+            } else {
+                alert(data.error);
+            }
+        }
+    </script>
+</body>
+</html>

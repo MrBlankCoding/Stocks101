@@ -1,4 +1,3 @@
-<!-- dashboard.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,49 +7,94 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
-    <nav class="bg-blue-600 p-4">
+<body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen">
+    <nav class="bg-gradient-to-r from-blue-700 to-blue-500 shadow-lg p-4">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-white text-2xl font-bold">StockDash</h1>
-            <div class="flex items-center space-x-4">
-                <span class="text-white">Balance: $<span id="balance">{{ "%.2f"|format(balance) }}</span></span>
-                <a href="{{ url_for('dashboard') }}" class="text-white hover:text-blue-200">Dashboard</a>
-                <a href="{{ url_for('portfolio_analysis') }}" class="text-white hover:text-blue-200">Analysis</a>
-                <a href="{{ url_for('trade_history') }}" class="text-white hover:text-blue-200">History</a>
-                <a href="{{ url_for('logout') }}" class="text-white hover:text-blue-200">Logout</a>
+            <div class="flex items-center">
+                <i class="fas fa-chart-line text-white text-2xl mr-3"></i>
+                <h1 class="text-white text-2xl font-bold tracking-wide">StockDash</h1>
+            </div>
+            <div class="flex items-center space-x-6">
+                <div class="flex items-center space-x-2 bg-white/20 px-4 py-2 rounded-full">
+                    <i class="fas fa-wallet text-white"></i>
+                    <span class="text-white font-medium">Balance: $<span id="balance">{{ "%.2f"|format(balance) }}</span></span>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="{{ url_for('dashboard') }}" class="text-white hover:bg-white/20 px-3 py-2 rounded-md transition duration-300 flex items-center">
+                        <i class="fas fa-home mr-2"></i>Dashboard
+                    </a>
+                    <a href="{{ url_for('portfolio_analysis') }}" class="text-white hover:bg-white/20 px-3 py-2 rounded-md transition duration-300 flex items-center">
+                        <i class="fas fa-chart-pie mr-2"></i>Analysis
+                    </a>
+                    <a href="{{ url_for('trade_history') }}" class="text-white hover:bg-white/20 px-3 py-2 rounded-md transition duration-300 flex items-center">
+                        <i class="fas fa-history mr-2"></i>History
+                    </a>
+                    <a href="{{ url_for('logout') }}" class="text-white hover:bg-red-500 px-3 py-2 rounded-md transition duration-300 flex items-center">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </a>
+                </div>
             </div>
         </div>
     </nav>
 
-    <div class="container mx-auto p-6">
+    <div class="container mx-auto p-6 space-y-6">
         <!-- Account Overview -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="text-lg font-semibold mb-2">Total Portfolio Value</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 p-6 border-l-4 border-blue-500">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-700">Total Portfolio Value</h3>
+                    <i class="fas fa-chart-bar text-blue-500"></i>
+                </div>
                 <p class="text-3xl font-bold text-blue-600">${{ "%.2f"|format(total_value) }}</p>
             </div>
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="text-lg font-semibold mb-2">Net Profit/Loss</h3>
+            <div class="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 p-6 border-l-4 {{ 'border-green-500' if net_profit > 0 else 'border-red-500' }}">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-700">Net Profit/Loss</h3>
+                    <i class="fas fa-{{ 'chart-line text-green-500' if net_profit > 0 else 'chart-line text-red-500' }}"></i>
+                </div>
                 <p class="text-3xl font-bold {{ 'text-green-600' if net_profit > 0 else 'text-red-600' }}">
                     ${{ "%.2f"|format(net_profit) }} ({{ "%.2f"|format(net_profit_percent) }}%)
                 </p>
             </div>
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="text-lg font-semibold mb-2">Cash Balance</h3>
+            <div class="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 p-6 border-l-4 border-gray-500">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-700">Cash Balance</h3>
+                    <i class="fas fa-piggy-bank text-gray-500"></i>
+                </div>
                 <p class="text-3xl font-bold text-gray-700">${{ "%.2f"|format(balance) }}</p>
             </div>
         </div>
 
         <!-- Trade Form -->
-        <div class="bg-white rounded-lg shadow p-6 mb-6">
-            <h2 class="text-xl font-semibold mb-4">Quick Trade</h2>
-            <div class="flex space-x-4 mb-4">
-                <input type="text" id="symbol" placeholder="Stock Symbol" class="border p-2 rounded">
-                <input type="number" id="shares" placeholder="Number of Shares" class="border p-2 rounded">
-                <button onclick="getStockInfo()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Get Quote</button>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 flex items-center">
+                <i class="fas fa-exchange-alt mr-3 text-blue-500"></i>Quick Trade
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <input type="text" id="symbol" placeholder="Stock Symbol" class="border-2 border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="number" id="shares" placeholder="Number of Shares" class="border-2 border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="getStockInfo()" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center">
+                    <i class="fas fa-search mr-2"></i>Get Quote
+                </button>
             </div>
-            <div id="stock-info" class="hidden mb-4">
+            <div id="stock-info" class="hidden mb-4 bg-gray-50 p-4 rounded-lg">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                         <p class="text-sm text-gray-600">Company</p>
@@ -70,18 +114,30 @@
                     </div>
                 </div>
                 <div class="flex space-x-4 mt-4">
-                    <button onclick="buyStock()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">Buy</button>
-                    <button onclick="sellStock()" class="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700">Sell</button>
+                    <button onclick="buyStock()" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition duration-300 flex items-center">
+                        <i class="fas fa-plus mr-2"></i>Buy
+                    </button>
+                    <button onclick="sellStock()" class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition duration-300 flex items-center">
+                        <i class="fas fa-minus mr-2"></i>Sell
+                    </button>
                 </div>
             </div>
         </div>
 
         <!-- Portfolio Table -->
-        <div class="bg-white rounded-lg shadow overflow-hidden">
-            <h2 class="text-xl font-semibold p-6 bg-gray-50">Current Portfolio</h2>
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="bg-gray-50 p-6 flex justify-between items-center">
+                <h2 class="text-xl font-semibold flex items-center">
+                    <i class="fas fa-briefcase mr-3 text-blue-500"></i>Current Portfolio
+                </h2>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-600">Last Updated:</span>
+                    <span id="last-updated" class="font-medium"></span>
+                </div>
+            </div>
             <div class="overflow-x-auto">
                 <table class="w-full">
-                    <thead class="bg-gray-50">
+                    <thead class="bg-gray-100">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shares</th>
@@ -91,10 +147,10 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit/Loss</th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
+                    <tbody class="divide-y divide-gray-200">
                         {% for position in portfolio %}
-                        <tr id="position-{{ position.symbol }}">
-                            <td class="px-6 py-4 whitespace-nowrap">{{ position.symbol }}</td>
+                        <tr id="position-{{ position.symbol }}" class="hover:bg-gray-50 transition duration-200">
+                            <td class="px-6 py-4 whitespace-nowrap font-medium">{{ position.symbol }}</td>
                             <td class="px-6 py-4 whitespace-nowrap">{{ "%.2f"|format(position.shares) }}</td>
                             <td class="px-6 py-4 whitespace-nowrap">${{ "%.2f"|format(position.avg_price) }}</td>
                             <td class="px-6 py-4 whitespace-nowrap price-cell">${{ "%.2f"|format(position.current_price) }}</td>
@@ -135,7 +191,15 @@
                     }, 1000);
                 }
             }
+            
+            // Update last updated time
+            document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
         }
+
+        window.addEventListener('load', () => {
+            // Set initial last updated time
+            document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+        });
 
         async function getStockInfo() {
             const symbol = document.getElementById('symbol').value.toUpperCase();

@@ -6,6 +6,7 @@
     <title>StockDash - Advanced Portfolio Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         /* Enhanced custom scrollbar */
@@ -184,17 +185,20 @@
                         <thead class="bg-gray-100">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shares</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Price</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Market Value</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit/Loss</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
                             {% for position in portfolio %}
                             <tr id="position-{{ position.symbol }}" class="hover:bg-gray-50 transition duration-200">
                                 <td class="px-6 py-4 whitespace-nowrap font-medium">{{ position.symbol }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ position.company_name }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ "%.2f"|format(position.shares) }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">${{ "%.2f"|format(position.avg_price) }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap price-cell">${{ "%.2f"|format(position.current_price) }}</td>
@@ -202,12 +206,46 @@
                                 <td class="px-6 py-4 whitespace-nowrap {{ 'text-green-600' if position.profit_loss > 0 else 'text-red-600' }}">
                                     ${{ "%.2f"|format(position.profit_loss) }} ({{ "%.2f"|format(position.profit_loss_percent) }}%)
                                 </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <button onclick="showStockDetails('{{ position.symbol }}')" 
+                                        class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
+                                        Details
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </section>
+    
+            <!-- Stock Details Modal -->
+            <div id="stock-details-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+                <div class="bg-white rounded-xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 id="modal-stock-symbol" class="text-2xl font-bold"></h2>
+                        <button onclick="closeStockDetailsModal()" class="text-gray-600 hover:text-gray-900">
+                            <i class="fas fa-times text-2xl"></i>
+                        </button>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-lg font-semibold mb-4">Company Information</h3>
+                            <div class="space-y-2">
+                                <p><strong>Name:</strong> <span id="modal-company-name"></span></p>
+                                <p><strong>Sector:</strong> <span id="modal-sector"></span></p>
+                                <p><strong>Market Cap:</strong> <span id="modal-market-cap"></span></p>
+                                <p><strong>P/E Ratio:</strong> <span id="modal-pe-ratio"></span></p>
+                                <p><strong>Dividend Yield:</strong> <span id="modal-dividend-yield"></span></p>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold mb-4">Price History</h3>
+                            <canvas id="price-history-chart" width="400" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -221,7 +259,6 @@
             }
         });
 
-        <!-- Previous code remains the same, continuing with the script -->
         function updatePrice(symbol, price) {
                 const row = document.getElementById(`position-${symbol}`);
                 if (row) {
@@ -305,6 +342,47 @@
                 } else {
                     alert(data.error);
                 }
+            }
+            function showStockDetails(symbol) {
+                const position = {{ portfolio | tojson | safe }}.find(p => p.symbol === symbol);
+                
+                if (position) {
+                    document.getElementById('modal-stock-symbol').textContent = symbol;
+                    document.getElementById('modal-company-name').textContent = position.company_name;
+                    document.getElementById('modal-sector').textContent = position.sector;
+                    document.getElementById('modal-market-cap').textContent = 
+                        `$${(position.market_cap / 1e9).toFixed(2)} B`;
+                    document.getElementById('modal-pe-ratio').textContent = position.pe_ratio.toFixed(2);
+                    document.getElementById('modal-dividend-yield').textContent = 
+                        `${(position.dividend_yield * 100).toFixed(2)}%`;
+    
+                    // Create price history chart
+                    const ctx = document.getElementById('price-history-chart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: position.price_history.map(h => h.date),
+                            datasets: [{
+                                label: 'Price',
+                                data: position.price_history.map(h => h.price),
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: { display: false }
+                            }
+                        }
+                    });
+    
+                    document.getElementById('stock-details-modal').classList.remove('hidden');
+                }
+            }
+    
+            function closeStockDetailsModal() {
+                document.getElementById('stock-details-modal').classList.add('hidden');
             }
         </script>
     </body>

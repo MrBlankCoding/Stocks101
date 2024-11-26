@@ -424,7 +424,7 @@ def logout():
 @app.route("/dashboard")
 @login_required
 @handle_errors
-@async_route  # Add this decorator
+@async_route
 async def dashboard():
     user_data = mongo.users.find_one({"_id": ObjectId(current_user.get_id())})
     portfolio = user_data.get("portfolio", {})
@@ -433,21 +433,21 @@ async def dashboard():
     portfolio_data = []
     total_portfolio_value = Decimal("0")
 
-    # Fetch all stock prices concurrently
-    async def fetch_all_prices():
+    # Fetch comprehensive stock info concurrently
+    async def fetch_all_stock_details():
         tasks = []
         for symbol in portfolio.keys():
             if portfolio[symbol]["shares"] > 0:
-                tasks.append(stock_service.get_stock_price(symbol))
+                tasks.append(stock_service.get_stock_info(symbol))
         return await asyncio.gather(*tasks)
 
-    stock_prices = await fetch_all_prices()
+    stock_details = await fetch_all_stock_details()
 
-    for (symbol, position), current_price in zip(portfolio.items(), stock_prices):
-        if position["shares"] > 0 and current_price:
+    for (symbol, position), stock_info in zip(portfolio.items(), stock_details):
+        if position["shares"] > 0 and stock_info:
             shares = Decimal(str(position["shares"]))
             avg_price = Decimal(str(position["avg_price"]))
-            current_price = Decimal(str(current_price))
+            current_price = Decimal(str(stock_info['price']))
 
             market_value = shares * current_price
             total_portfolio_value += market_value
@@ -464,8 +464,13 @@ async def dashboard():
                     "profit_loss_percent": (
                         (current_price - avg_price) / avg_price * 100
                     ).quantize(Decimal("0.01")),
-                    "day_change": position.get("day_change", Decimal("0")),
-                    "last_updated": datetime.now(),
+                    "company_name": stock_info.get('company_name', symbol),
+                    "sector": stock_info.get('sector', 'N/A'),
+                    "pe_ratio": stock_info.get('pe_ratio', 0),
+                    "dividend_yield": stock_info.get('dividend_yield', 0),
+                    "market_cap": stock_info.get('market_cap', 0),
+                    "price_history": stock_info.get('price_history', []),
+                    "last_updated": stock_info.get('last_updated', datetime.now()),
                 }
             )
 

@@ -8,8 +8,8 @@ from functools import wraps
 from typing import Dict, Optional
 from asyncio import run
 import json
-
 import asyncio
+import finnhub
 import yfinance as yf
 from bson import ObjectId
 from bson.decimal128 import Decimal128
@@ -30,7 +30,6 @@ from flask_login import (
     logout_user,
     current_user,
 )
-from polygon import RESTClient
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -135,9 +134,45 @@ class User(UserMixin):
         )
 
 
+from dotenv import load_dotenv
+import os
+from datetime import datetime, timedelta
+from decimal import Decimal
+import logging
+import re
+from functools import wraps
+from typing import Dict, Optional
+from asyncio import run
+import json
+import asyncio
+import finnhub
+import yfinance as yf
+from bson import ObjectId
+from bson.decimal128 import Decimal128
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    jsonify,
+)
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    login_user,
+    login_required,
+    logout_user,
+    current_user,
+)
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+from werkzeug.security import generate_password_hash, check_password_hash
+
 class StockMarketService:
-    def __init__(self, polygon_api_key: str):
-        self.polygon_client = RESTClient(polygon_api_key)
+    def __init__(self, finnhub_api_key: str):
+        self.finnhub_client = finnhub.Client(api_key="ct0h0spr01qkfpo5o4vgct0h0spr01qkfpo5o500")
         self.cache = {}
         self.cache_timeout = 60  # seconds
 
@@ -151,14 +186,14 @@ class StockMarketService:
             return cached_data["price"]
 
         try:
-            # Modified Polygon API call for basic plan
-            aggs = self.polygon_client.get_previous_close_agg(symbol)
-            if isinstance(aggs, list) and aggs:  # Check if it's a list and not empty
-                price = float(aggs[0].close)
+            # Try Finnhub quote first
+            quote = self.finnhub_client.quote(symbol)
+            if quote and quote.get('c'):  # Current price
+                price = float(quote['c'])
             else:
-                raise ValueError("No data returned from Polygon")
-        except Exception as polygon_error:
-            logger.warning(f"Polygon API failed for {symbol}: {polygon_error}")
+                raise ValueError("No price data from Finnhub")
+        except Exception as finnhub_error:
+            logger.warning(f"Finnhub API failed for {symbol}: {finnhub_error}")
             try:
                 # Fallback to Yahoo Finance
                 stock = yf.Ticker(symbol)
@@ -172,57 +207,50 @@ class StockMarketService:
         return price
 
     async def get_stock_info(self, symbol: str) -> Dict:
-        """Get detailed stock information using both Polygon and YFinance data."""
+        """Get detailed stock information using both Finnhub and YFinance data."""
         try:
             # Get the current price first
             price = await self.get_stock_price(symbol)
             if not price:
                 raise ValueError(f"Could not fetch price for {symbol}")
 
-            # Try to get details from Polygon first
+            # Try to get details from Finnhub
             try:
-                ticker_details = self.polygon_client.get_ticker_details(symbol)
-                company_name = (
-                    ticker_details.name if hasattr(ticker_details, "name") else None
-                )
-                market_cap = (
-                    ticker_details.market_cap
-                    if hasattr(ticker_details, "market_cap")
-                    else None
-                )
-            except Exception as polygon_error:
+                # Fetch company profile
+                profile = self.finnhub_client.company_profile2(symbol=symbol)
+                
+                # Fetch company financials
+                financials = self.finnhub_client.company_basic_financials(symbol=symbol, metric='all')
+            except Exception as finnhub_error:
                 logger.warning(
-                    f"Polygon API failed for ticker details {symbol}: {polygon_error}"
+                    f"Finnhub API failed for ticker details {symbol}: {finnhub_error}"
                 )
-                company_name = None
-                market_cap = None
+                profile = {}
+                financials = {}
 
             # Get additional info from YFinance as backup or supplement
             try:
                 stock = yf.Ticker(symbol)
                 info = stock.info
 
-                # Use Polygon data if available, otherwise fall back to YFinance
-                company_name = company_name or info.get("longName", "")
-                market_cap = market_cap or info.get("marketCap", 0)
-
+                # Merge Finnhub and YFinance data
                 stock_info = {
                     "symbol": symbol,
                     "price": price,
-                    "company_name": company_name,
-                    "market_cap": market_cap,
-                    "pe_ratio": info.get("trailingPE", 0),
+                    "company_name": profile.get('name') or info.get("longName", ""),
+                    "market_cap": profile.get('marketCapitalization') or info.get("marketCap", 0),
+                    "pe_ratio": financials.get('metric', {}).get('peBasicExclExtraTTM') or info.get("trailingPE", 0),
                     "volume": info.get("volume", 0),
-                    "sector": info.get("sector", ""),
-                    "industry": info.get("industry", ""),
-                    "website": info.get("website", ""),
-                    "description": info.get("longBusinessSummary", ""),
-                    "currency": info.get("currency", "USD"),
-                    "exchange": info.get("exchange", ""),
-                    "fifty_two_week_high": info.get("fiftyTwoWeekHigh", 0),
-                    "fifty_two_week_low": info.get("fiftyTwoWeekLow", 0),
-                    "dividend_yield": info.get("dividendYield", 0),
-                    "beta": info.get("beta", 0),
+                    "sector": profile.get('finnhubIndustry') or info.get("sector", ""),
+                    "industry": profile.get('finnhubIndustry') or info.get("industry", ""),
+                    "website": profile.get('weburl') or info.get("website", ""),
+                    "description": profile.get('description') or info.get("longBusinessSummary", ""),
+                    "currency": profile.get('currency') or info.get("currency", "USD"),
+                    "exchange": profile.get('exchange') or info.get("exchange", ""),
+                    "fifty_two_week_high": financials.get('metric', {}).get('52WeekHigh') or info.get("fiftyTwoWeekHigh", 0),
+                    "fifty_two_week_low": financials.get('metric', {}).get('52WeekLow') or info.get("fiftyTwoWeekLow", 0),
+                    "dividend_yield": financials.get('metric', {}).get('dividendYieldTTM') or info.get("dividendYield", 0),
+                    "beta": financials.get('metric', {}).get('beta') or info.get("beta", 0),
                     "last_updated": datetime.now().isoformat(),
                 }
 
@@ -246,8 +274,8 @@ class StockMarketService:
                 return {
                     "symbol": symbol,
                     "price": price,
-                    "company_name": company_name or symbol,
-                    "market_cap": market_cap or 0,
+                    "company_name": profile.get('name') or symbol,
+                    "market_cap": profile.get('marketCapitalization') or 0,
                     "last_updated": datetime.now().isoformat(),
                 }
 
@@ -256,17 +284,17 @@ class StockMarketService:
             return None
 
     async def get_market_hours(self, symbol: str) -> Dict:
-        """Get market hours information for a symbol."""
+        """Get market hours information."""
         try:
-            # Try Polygon API first
-            market_status = self.polygon_client.get_market_status()
+            # Use Finnhub market hours lookup
+            market_status = self.finnhub_client.market_status()
+            
             return {
-                "is_market_open": market_status.market == "open",
-                "next_open": market_status.next_open,
-                "next_close": market_status.next_close,
+                "is_market_open": market_status.get('marketStatus') == 'open',
+                "market": market_status.get('market', 'US'),
             }
         except Exception as e:
-            logger.warning(f"Could not fetch market hours from Polygon: {e}")
+            logger.warning(f"Could not fetch market hours from Finnhub: {e}")
             # Fallback to basic US market hours
             now = datetime.now().astimezone()
             is_weekday = now.weekday() < 5
@@ -278,6 +306,10 @@ class StockMarketService:
                 "next_close": market_close,
             }
 
+# Update stock service initialization
+stock_service = StockMarketService(
+    os.getenv("FINNHUB_API_KEY")  # Change from POLYGON_API_KEY to FINNHUB_API_KEY
+)
 
 # Create a JSON encoder that handles Decimal
 class CustomJSONEncoder(json.JSONEncoder):

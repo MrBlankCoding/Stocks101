@@ -3,7 +3,7 @@ yfinance
 pymongo
 flask
 flask_login
-polygon-api-client
+finnhub-python
 flask_socketio
 python-dotenv
 scipy

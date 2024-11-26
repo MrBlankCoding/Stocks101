@@ -207,6 +207,7 @@
             </section>
 
             <!-- Portfolio Table with Advanced Features -->
+            <!-- Portfolio Table -->
             <section class="mt-8 bg-white rounded-xl shadow-lg overflow-hidden card-hover">
                 <div class="bg-gray-50 p-6 flex justify-between items-center">
                     <h2 class="text-xl font-semibold flex items-center">
@@ -224,39 +225,26 @@
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Market Value</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit/Loss</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200">
                             {% for position in portfolio %}
                             <tr id="position-{{ position.symbol }}" class="hover:bg-gray-50 transition duration-200">
-                                <td class="px-6 py-4 whitespace-nowrap font-medium">
-                                    <span class="text-gray-900">{{ position.symbol }}</span>
+                                <td class="px-6 py-4 whitespace-nowrap font-medium">{{ position.symbol }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ position.company_name }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ "%.2f"|format(position.shares) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">${{ "%.2f"|format(position.avg_price) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap price-cell">${{ "%.2f"|format(position.current_price) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">${{ "%.2f"|format(position.market_value) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap {{ 'text-green-600' if position.profit_loss > 0 else 'text-red-600' }}">
+                                    ${{ "%.2f"|format(position.profit_loss) }} ({{ "%.2f"|format(position.profit_loss_percent) }}%)
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <div class="ml-4">
-                                            <div class="text-sm font-medium text-gray-900">{{ position.company_name }}</div>
-                                            <div class="text-sm text-gray-500">{{ position.sector }}</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="text-sm text-gray-900">{{ "%.2f"|format(position.shares) }}</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="text-sm text-gray-900">${{ "%.2f"|format(position.avg_price) }}</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap price-cell">
-                                    <span class="text-sm text-gray-900">${{ "%.2f"|format(position.current_price) }}</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="text-sm font-medium text-gray-900">${{ "%.2f"|format(position.market_value) }}</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="{{ 'text-green-600' if position.profit_loss > 0 else 'text-red-600' }} text-sm font-medium">
-                                        ${{ "%.2f"|format(position.profit_loss) }} 
-                                        ({{ "%.2f"|format(position.profit_loss_percent) }}%)
-                                    </span>
+                                    <button onclick="showStockDetails('{{ position.symbol }}')" 
+                                        class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition">
+                                        Details
+                                    </button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -305,14 +293,6 @@
                             <canvas id="price-history-chart" width="400" height="250"></canvas>
                         </div>
                     </div>
-                    <div class="mt-6 flex justify-end space-x-4">
-                        <button onclick="closeStockDetailsModal()" class="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 transition">
-                            Close
-                        </button>
-                        <button onclick="tradeStock()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition">
-                            Trade Stock
-                        </button>
-                    </div>
                 </div>
             </div>
         </main>
@@ -322,6 +302,7 @@
         // Enhanced WebSocket and Real-Time Updates
         const socket = io();
         let connectionAttempts = 0;
+        let currentPriceHistoryChart = null;
         
         socket.on('connect', () => {
             connectionAttempts = 0;
@@ -459,10 +440,15 @@
                 document.getElementById('modal-pe-ratio').textContent = position.pe_ratio.toFixed(2);
                 document.getElementById('modal-dividend-yield').textContent = 
                     `${(position.dividend_yield * 100).toFixed(2)}%`;
-
+        
+                // Destroy existing chart if it exists
+                if (currentPriceHistoryChart) {
+                    currentPriceHistoryChart.destroy();
+                }
+        
                 // Create price history chart with enhanced styling
                 const ctx = document.getElementById('price-history-chart').getContext('2d');
-                new Chart(ctx, {
+                currentPriceHistoryChart = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: position.price_history.map(h => h.date),
@@ -490,18 +476,17 @@
                         }
                     }
                 });
-
+        
                 document.getElementById('stock-details-modal').classList.remove('hidden');
             }
         }
 
         function closeStockDetailsModal() {
-            document.getElementById('stock-details-modal').classList.add('hidden');
-        }
-
-        function tradeStock(symbol) {
-            // Implement trade functionality or open trade modal
-            document.getElementById('symbol').value = symbol || document.getElementById('modal-stock-symbol').textContent;
+            // Optionally destroy the chart when closing the modal
+            if (currentPriceHistoryChart) {
+                currentPriceHistoryChart.destroy();
+                currentPriceHistoryChart = null;
+            }
             document.getElementById('stock-details-modal').classList.add('hidden');
         }
     </script>

@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}
+User management
+{% endblock %}
+{% block content %}
+<h1>User Details for {{ user_email }}</h1>
+
+<section>
+    <h2>Account Summary</h2>
+    <p>Balance: ${{ balance }}</p>
+    <p>Total Portfolio Value: ${{ total_portfolio_value }}</p>
+</section>
+
+<section>
+    <h2>Portfolio</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Symbol</th>
+                <th>Company</th>
+                <th>Shares</th>
+                <th>Avg Price</th>
+                <th>Current Price</th>
+                <th>Market Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stock in portfolio %}
+            <tr>
+                <td>{{ stock.symbol }}</td>
+                <td>{{ stock.company_name }}</td>
+                <td>{{ stock.shares }}</td>
+                <td>{{ stock.avg_price }}</td>
+                <td>{{ stock.current_price }}</td>
+                <td>{{ stock.market_value }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Trade History</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Symbol</th>
+                <th>Shares</th>
+                <th>Price</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for trade in trade_history %}
+            <tr>
+                <td>{{ trade.type }}</td>
+                <td>{{ trade.symbol }}</td>
+                <td>{{ trade.shares }}</td>
+                <td>{{ trade.price }}</td>
+                <td>{{ trade.timestamp }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

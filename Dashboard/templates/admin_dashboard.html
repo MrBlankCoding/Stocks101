@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">Admin Dashboard</h1>
+    
+    <div class="bg-white shadow-md rounded-lg overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-gray-100 border-b">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Portfolio Value</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Trades</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for user in users %}
+                <tr class="hover:bg-gray-50 transition duration-150 ease-in-out">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ user.email }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${{ user.balance|round(2) }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${{ user.portfolio_value|round(2) }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ user.total_trades }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex space-x-2">
+                            <a href="{{ url_for('inspect_user', user_id=user.id) }}" 
+                               class="text-indigo-600 hover:text-indigo-900 transition duration-150 ease-in-out">
+                                Inspect
+                            </a>
+                            <form action="{{ url_for('adjust_balance') }}" method="POST" class="flex items-center space-x-2">
+                                <input type="hidden" name="user_id" value="{{ user.id }}">
+                                <input type="number" name="amount" 
+                                       placeholder="Amount" 
+                                       class="w-24 px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <button type="submit" name="action" value="add" 
+                                        class="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition duration-150 ease-in-out">
+                                    Add
+                                </button>
+                                <button type="submit" name="action" value="subtract" 
+                                        class="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition duration-150 ease-in-out">
+                                    Subtract
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

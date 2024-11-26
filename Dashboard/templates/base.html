@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+   <head>
+      <meta charset="UTF-8" />
+      <title>{% block title %}Stocks101 - Paper Trading App{% endblock %}</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <meta name="description" content="Learn trading with a risk-free paper trading app. Create solo accounts or manage an enterprise account with ease." />
+      <meta name="keywords" content="Stocks, Paper Trading, Investment, Simulation, Financial Education, Enterprise" />
+      <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}" />
+      <script src="https://cdn.tailwindcss.com"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+      <!-- Open Graph (OG) Tags for Social Sharing -->
+      <meta property="og:title" content="Stocks101 - Paper Trading App" />
+      <meta property="og:description" content="Learn to trade risk-free with Stocks101, the modern paper trading platform for financial growth and enterprise management." />
+      <meta property="og:image" content="{{ url_for('static', filename='images/preview.png') }}" />
+      <meta property="og:url" content="{{ request.url }}" />
+      <meta property="og:type" content="website" />
+      <!-- Twitter Card Tags -->
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="Stocks101 - Paper Trading Simplified" />
+      <meta name="twitter:description" content="Simulate trading strategies and grow your skills risk-free with Stocks101." />
+      <meta name="twitter:image" content="{{ url_for('static', filename='images/preview.png') }}" />
+      <!-- Canonical Tag -->
+      <link rel="canonical" href="{{ request.url }}" />
+      <!-- Robots Meta Tag -->
+      <meta name="robots" content="index, follow" />
+      <!-- Structured Data (JSON-LD) for SEO -->
+      <script type="application/ld+json">
+         {
+             "@context": "https://schema.org",
+             "@type": "SoftwareApplication",
+             "name": "Stocks101",
+             "operatingSystem": "Web",
+             "applicationCategory": "FinanceApplication",
+             "description": "A modern paper trading platform for learning investment strategies without real-world risks.",
+             "url": "{{ request.url }}",
+             "image": "{{ url_for('static', filename='images/preview.png') }}",
+             "softwareVersion": "1.0.0",
+             "inLanguage": "en",
+             "offers": {
+                 "@type": "Offer",
+                 "price": "0",
+                 "priceCurrency": "USD"
+             }
+         }
+      </script>
+   </head>
+   <body class="min-h-screen antialiased text-gray-900">
+      <!-- Main Content Area -->
+      <div class="content">
+         {% block content %} {% endblock %}
+      </div>
+   </body>
+</html>

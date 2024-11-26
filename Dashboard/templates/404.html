@@ -1,27 +1,22 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>404 - Page Not Found</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-50 flex items-center justify-center h-screen">
-  <div class="text-center">
-    <div class="mb-8">
+{% extends 'base.html' %}
+{% block title %}
+404 - Page Not Found
+{% endblock %}
+{% block content %}
+<div class="text-center">
+   <div class="mb-8">
       <!-- Icon or chart graphic -->
       <div class="relative">
-        <svg class="w-24 h-24 mx-auto text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 3l18 18M9 9v6M15 9v6M3 21h18" />
-        </svg>
+         <svg class="w-24 h-24 mx-auto text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3l18 18M9 9v6M15 9v6M3 21h18" />
+         </svg>
       </div>
-    </div>
-    <h1 class="text-4xl font-bold text-gray-800 mb-4">404 - Page Not Found</h1>
-    <p class="text-lg text-gray-600 mb-6">Looks like you’re trying to trade a non-existent page. 🤔</p>
-    <p class="text-lg text-gray-600 mb-6">The market for this page has crashed!</p>
-    <a href="/" class="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">
-      Go Back to Dashboard
-    </a>
-  </div>
-</body>
-</html>
+   </div>
+   <h1 class="text-4xl font-bold text-gray-800 mb-4">404 - Page Not Found</h1>
+   <p class="text-lg text-gray-600 mb-6">Looks like you’re trying to trade a non-existent page. 🤔</p>
+   <p class="text-lg text-gray-600 mb-6">The market for this page has crashed!</p>
+   <a href="/" class="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">
+   Go Back to Dashboard
+   </a>
+</div>
+{% endblock %}

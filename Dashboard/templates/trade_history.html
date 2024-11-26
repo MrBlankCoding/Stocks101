@@ -1,106 +1,97 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StockDash - Trade History</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-</head>
-<body class="bg-gray-50">
-    <nav class="bg-gradient-to-r from-blue-700 to-blue-500 shadow-lg p-4">
-        <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center">
-                <i class="fas fa-chart-line text-white text-2xl mr-3"></i>
-                <h1 class="text-white text-2xl font-bold tracking-wide">StockDash</h1>
-            </div>
-            <div class="flex space-x-4">
-                <a href="{{ url_for('dashboard') }}" class="text-white hover:bg-white/20 px-3 py-2 rounded-md transition duration-300 flex items-center">
-                    <i class="fas fa-home mr-2"></i>Dashboard
-                </a>
-                <a href="{{ url_for('portfolio_analysis') }}" class="text-white hover:bg-white/20 px-3 py-2 rounded-md transition duration-300 flex items-center">
-                    <i class="fas fa-chart-pie mr-2"></i>Analysis
-                </a>
-                <a href="{{ url_for('trade_history') }}" class="text-white hover:bg-white/20 px-3 py-2 rounded-md transition duration-300 flex items-center">
-                    <i class="fas fa-history mr-2"></i>History
-                </a>
-                <a href="{{ url_for('logout') }}" class="text-white hover:bg-red-500 px-3 py-2 rounded-md transition duration-300 flex items-center">
-                    <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                </a>
-            </div>
-        </div>
-    </nav>
-
-    <div class="container mx-auto p-6">
-        <div class="bg-white rounded-lg shadow-md overflow-hidden">
-            <div class="bg-gray-50 p-6 flex justify-between items-center">
-                <h2 class="text-xl font-semibold text-gray-700 flex items-center">Trade History</h2>
-                <div class="text-sm text-gray-600">
-                    Total Trades: {{ trades|length }}
-                </div>
-            </div>
-
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gray-100 border-b">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shares</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P/L</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        {% for trade in trades %}
-                        <tr class="hover:bg-gray-50 transition duration-150">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ trade.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                    {{ 'bg-green-100 text-green-800' if trade.type == 'buy' else 'bg-red-100 text-red-800' }}">
-                                    {{ trade.type|upper }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ trade.symbol }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ "%.2f"|format(trade.shares) }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${{ "%.2f"|format(trade.price) }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${{ "%.2f"|format(trade.total) }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm {{ 'text-green-600' if trade.get('realized_pl', 0) > 0 else 'text-red-600' }}">
-                                {% if trade.get('realized_pl') %}
-                                    ${{ "%.2f"|format(trade.realized_pl) }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Enhanced Pagination -->
-            <div class="bg-gray-50 px-6 py-4 flex items-center justify-between">
-                <div class="flex-1 flex justify-between items-center space-x-4">
-                    {% if has_prev %}
-                    <a href="{{ url_for('trade_history', page=page-1) }}" 
-                       class="px-4 py-2 border border-blue-500 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 transition duration-300 flex items-center">
-                        Previous
-                    </a>
-                    {% endif %}
-                    <span class="text-sm text-gray-600">
-                        Page <span class="font-semibold">{{ page }}</span> of <span class="font-semibold">{{ total_pages }}</span>
-                    </span>
-                    {% if has_next %}
-                    <a href="{{ url_for('trade_history', page=page+1) }}"
-                       class="px-4 py-2 border border-blue-500 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 transition duration-300 flex items-center">
-                        Next
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-</body>
-</html>
+{% extends 'base.html' %}
+{% block title %}
+Trade Hisotry
+{% endblock %}
+{% block content %}
+<nav class="bg-gradient-to-r from-blue-700 to-blue-500 shadow-lg p-4">
+   <div class="container mx-auto flex justify-between items-center">
+      <div class="flex items-center">
+         <i class="fas fa-chart-line text-white text-2xl mr-3"></i>
+         <h1 class="text-white text-2xl font-bold tracking-wide">StockDash</h1>
+      </div>
+      <div class="flex space-x-4">
+         <a href="{{ url_for('dashboard') }}" class="text-white hover:bg-white/20 px-3 py-2 rounded-md transition duration-300 flex items-center">
+         <i class="fas fa-home mr-2"></i>Dashboard
+         </a>
+         <a href="{{ url_for('portfolio_analysis') }}" class="text-white hover:bg-white/20 px-3 py-2 rounded-md transition duration-300 flex items-center">
+         <i class="fas fa-chart-pie mr-2"></i>Analysis
+         </a>
+         <a href="{{ url_for('trade_history') }}" class="text-white hover:bg-white/20 px-3 py-2 rounded-md transition duration-300 flex items-center">
+         <i class="fas fa-history mr-2"></i>History
+         </a>
+         <a href="{{ url_for('logout') }}" class="text-white hover:bg-red-500 px-3 py-2 rounded-md transition duration-300 flex items-center">
+         <i class="fas fa-sign-out-alt mr-2"></i>Logout
+         </a>
+      </div>
+   </div>
+</nav>
+<div class="container mx-auto p-6">
+   <div class="bg-white rounded-lg shadow-md overflow-hidden">
+      <div class="bg-gray-50 p-6 flex justify-between items-center">
+         <h2 class="text-xl font-semibold text-gray-700 flex items-center">Trade History</h2>
+         <div class="text-sm text-gray-600">
+            Total Trades: {{ trades|length }}
+         </div>
+      </div>
+      <div class="overflow-x-auto">
+         <table class="w-full">
+            <thead class="bg-gray-100 border-b">
+               <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shares</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">P/L</th>
+               </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+               {% for trade in trades %}
+               <tr class="hover:bg-gray-50 transition duration-150">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ trade.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        {{ 'bg-green-100 text-green-800' if trade.type == 'buy' else 'bg-red-100 text-red-800' }}">
+                     {{ trade.type|upper }}
+                     </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ trade.symbol }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{{ "%.2f"|format(trade.shares) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${{ "%.2f"|format(trade.price) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${{ "%.2f"|format(trade.total) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm {{ 'text-green-600' if trade.get('realized_pl', 0) > 0 else 'text-red-600' }}">
+                     {% if trade.get('realized_pl') %}
+                     ${{ "%.2f"|format(trade.realized_pl) }}
+                     {% else %}
+                     -
+                     {% endif %}
+                  </td>
+               </tr>
+               {% endfor %}
+            </tbody>
+         </table>
+      </div>
+      <!-- Enhanced Pagination -->
+      <div class="bg-gray-50 px-6 py-4 flex items-center justify-between">
+         <div class="flex-1 flex justify-between items-center space-x-4">
+            {% if has_prev %}
+            <a href="{{ url_for('trade_history', page=page-1) }}" 
+               class="px-4 py-2 border border-blue-500 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 transition duration-300 flex items-center">
+            Previous
+            </a>
+            {% endif %}
+            <span class="text-sm text-gray-600">
+            Page <span class="font-semibold">{{ page }}</span> of <span class="font-semibold">{{ total_pages }}</span>
+            </span>
+            {% if has_next %}
+            <a href="{{ url_for('trade_history', page=page+1) }}"
+               class="px-4 py-2 border border-blue-500 text-sm font-medium rounded-md text-blue-600 bg-white hover:bg-blue-50 transition duration-300 flex items-center">
+            Next
+            </a>
+            {% endif %}
+         </div>
+      </div>
+   </div>
+</div>
+{% endblock %}

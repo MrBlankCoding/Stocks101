@@ -9,6 +9,7 @@ from typing import Dict, Optional
 from asyncio import run
 import json
 import asyncio
+import uuid
 import finnhub
 import yfinance as yf
 from bson import ObjectId
@@ -21,6 +22,7 @@ from flask import (
     url_for,
     flash,
     jsonify,
+    abort
 )
 from flask_login import (
     LoginManager,
@@ -123,7 +125,27 @@ class User(UserMixin):
         self.portfolio = user_data.get("portfolio", {})
         self.trade_history = user_data.get("trade_history", [])
         self.last_login = user_data.get("last_login")
+        
+        # Enhanced account type handling
         self.account_type = user_data.get("account_type", "basic")
+        
+        # New admin-related fields
+        self.admin_domain = user_data.get("admin_domain", None)
+        self.managed_users = user_data.get("managed_users", [])
+        self.company_name = user_data.get("company_name")  # New field for admin's company
+        self.invite_code = user_data.get("invite_code")
+
+    def is_admin(self):
+        return self.account_type == "admin"
+
+    def can_manage_user(self, user_id):
+        """Check if admin can manage a specific user"""
+        return (self.is_admin() and 
+                user_id in self.managed_users)
+
+    def get_invite_code(self):
+        """Retrieve the admin's invite code"""
+        return self.invite_code if self.is_admin() else None
 
     def get_id(self):
         return self.id
@@ -133,46 +155,9 @@ class User(UserMixin):
             {"_id": ObjectId(self.id)}, {"$set": {"last_login": datetime.now()}}
         )
 
-
-from dotenv import load_dotenv
-import os
-from datetime import datetime, timedelta
-from decimal import Decimal
-import logging
-import re
-from functools import wraps
-from typing import Dict, Optional
-from asyncio import run
-import json
-import asyncio
-import finnhub
-import yfinance as yf
-from bson import ObjectId
-from bson.decimal128 import Decimal128
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    flash,
-    jsonify,
-)
-from flask_login import (
-    LoginManager,
-    UserMixin,
-    login_user,
-    login_required,
-    logout_user,
-    current_user,
-)
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
-from werkzeug.security import generate_password_hash, check_password_hash
-
 class StockMarketService:
     def __init__(self, finnhub_api_key: str):
-        self.finnhub_client = finnhub.Client(api_key="ct0h0spr01qkfpo5o4vgct0h0spr01qkfpo5o500")
+        self.finnhub_client = finnhub.Client(os.getenv("FINNHUB_API_KEY"))
         self.cache = {}
         self.cache_timeout = 60  # seconds
 
@@ -328,12 +313,6 @@ class CustomJSONEncoder(json.JSONEncoder):
 # Update the Flask app configuration
 app.json_encoder = CustomJSONEncoder
 
-
-stock_service = StockMarketService(
-    os.getenv("POLYGON_API_KEY")
-)  # Use POLYGON_API_KEY from environment variable
-
-
 # Custom decorators for error handling and validation
 def handle_errors(f):
     @wraps(f)
@@ -391,6 +370,7 @@ def register():
     if request.method == "POST":
         email = request.form["email"].lower().strip()
         password = request.form["password"]
+        admin_invite_code = request.form.get("admin_invite_code", "")
 
         # Enhanced input validation
         if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email):
@@ -405,25 +385,116 @@ def register():
             flash("Email already exists")
             return redirect(url_for("register"))
 
-        # Create user with enhanced security and tracking
-        mongo.users.insert_one(
-            {
-                "email": email,
-                "password": generate_password_hash(password, method="pbkdf2:sha256"),
-                "balance": Decimal128(Decimal("10000.00")),
-                "portfolio": {},
-                "trade_history": [],
-                "created_at": datetime.now(),
-                "last_login": None,
-                "account_type": "basic",
-                "login_attempts": 0,
-            }
-        )
+        # Check admin invite code if provided
+        admin_user = None
+        if admin_invite_code:
+            admin_user = mongo.users.find_one({
+                "account_type": "admin", 
+                "invite_code": admin_invite_code
+            })
+            if not admin_user:
+                flash("Invalid admin invite code")
+                return redirect(url_for("register"))
+
+        # Create user with admin domain if applicable
+        user_data = {
+            "email": email,
+            "password": generate_password_hash(password, method="pbkdf2:sha256"),
+            "balance": Decimal128(Decimal("10000.00")),
+            "portfolio": {},
+            "trade_history": [],
+            "created_at": datetime.now(),
+            "last_login": None,
+            "account_type": "basic",
+            "login_attempts": 0,
+        }
+
+        # If registering through admin invite, set admin domain
+        if admin_user:
+            user_data["admin_domain"] = str(admin_user["_id"])
+            # Update admin's managed users
+            mongo.users.update_one(
+                {"_id": admin_user["_id"]},
+                {"$push": {"managed_users": str(user_data["_id"])}}
+            )
+
+        mongo.users.insert_one(user_data)
 
         flash("Registration successful")
         return redirect(url_for("login"))
 
     return render_template("register.html")
+
+@app.route("/admin/signup", methods=["GET", "POST"])
+def admin_signup():
+    if request.method == "POST":
+        # Collect admin signup information
+        company_name = request.form["company_name"].strip()
+        email = request.form["email"].lower().strip()
+        password = request.form["password"]
+        confirm_password = request.form["confirm_password"]
+        admin_registration_key = request.form["admin_registration_key"]
+
+        # Validation checks
+        if not company_name:
+            flash("Company name is required")
+            return redirect(url_for("admin_signup"))
+
+        if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email):
+            flash("Invalid email format")
+            return redirect(url_for("admin_signup"))
+
+        if password != confirm_password:
+            flash("Passwords do not match")
+            return redirect(url_for("admin_signup"))
+
+        if len(password) < 12:
+            flash("Password must be at least 12 characters long")
+            return redirect(url_for("admin_signup"))
+
+        # Check if admin registration key is valid 
+        # In a real-world scenario, this would be a secure, time-limited, or one-time use key
+        if admin_registration_key != os.getenv("admin_registration_key"):
+            flash("Invalid admin registration key")
+            return redirect(url_for("admin_signup"))
+
+        # Check if email already exists
+        existing_user = mongo.users.find_one({"email": email})
+        if existing_user:
+            flash("Email already exists")
+            return redirect(url_for("admin_signup"))
+
+        # Generate unique invite code for the admin's domain
+        invite_code = str(uuid.uuid4())
+
+        # Create admin account
+        admin_data = {
+            "email": email,
+            "password": generate_password_hash(password, method="pbkdf2:sha256"),
+            "account_type": "admin",
+            "company_name": company_name,
+            "invite_code": invite_code,
+            "managed_users": [],
+            "admin_domain": None,  # The admin's own ID will be set as their domain
+            "created_at": datetime.now(),
+            "last_login": None,
+            "registration_ip": request.remote_addr,
+        }
+
+        # Insert admin user
+        result = mongo.users.insert_one(admin_data)
+        admin_id = str(result.inserted_id)
+
+        # Update the admin's domain to be their own ID
+        mongo.users.update_one(
+            {"_id": result.inserted_id},
+            {"$set": {"admin_domain": admin_id}}
+        )
+
+        flash("Admin account created successfully")
+        return redirect(url_for("login"))
+
+    return render_template("admin_signup.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -523,6 +594,194 @@ async def dashboard():
         account_type=current_user.account_type,
     )
 
+@app.route("/admin/dashboard")
+@login_required
+@handle_errors
+def admin_dashboard():
+    # Ensure only admins can access
+    if not current_user.is_admin():
+        abort(403)  # Forbidden
+
+    # Fetch users in admin's domain
+    managed_users = mongo.users.find({
+        "admin_domain": current_user.get_id()
+    })
+
+    # Prepare user data for display
+    user_list = []
+    for user in managed_users:
+        user_summary = {
+            "id": str(user["_id"]),
+            "email": user["email"],
+            "balance": float(user.get("balance", "0")),  # Convert to float
+            "portfolio_value": _calculate_portfolio_value(user),
+            "total_trades": len(user.get("trade_history", [])),
+            "last_login": user.get("last_login")
+        }
+        user_list.append(user_summary)
+
+    return render_template(
+        "admin_dashboard.html", 
+        users=user_list
+    )
+
+@app.route("/admin/user/<user_id>")
+@login_required
+@handle_errors
+def inspect_user(user_id):
+    # Ensure only admins can access and only their domain users
+    if not current_user.is_admin() or not current_user.can_manage_user(user_id):
+        abort(403)  # Forbidden
+
+    # Fetch user details
+    user_data = mongo.users.find_one({"_id": ObjectId(user_id)})
+    if not user_data:
+        abort(404)  # Not Found
+
+    # Prepare detailed user information
+    portfolio = user_data.get("portfolio", {})
+    portfolio_details = []
+    total_portfolio_value = Decimal("0")
+
+    for symbol, position in portfolio.items():
+        if position["shares"] > 0:
+            try:
+                stock_info = stock_service.get_stock_info(symbol)
+                shares = Decimal(str(position["shares"]))
+                avg_price = Decimal(str(position["avg_price"]))
+                current_price = Decimal(str(stock_info['price']))
+
+                market_value = shares * current_price
+                total_portfolio_value += market_value
+
+                portfolio_details.append({
+                    "symbol": symbol,
+                    "shares": shares,
+                    "avg_price": avg_price,
+                    "current_price": current_price,
+                    "market_value": market_value,
+                    "company_name": stock_info.get('company_name', symbol)
+                })
+            except Exception:
+                continue
+
+    # Fetch trade history
+    trade_history = user_data.get("trade_history", [])
+
+    return render_template(
+        "admin_user_inspect.html",
+        user_email=user_data["email"],
+        balance=Decimal(str(user_data.get("balance", "0"))),
+        total_portfolio_value=total_portfolio_value,
+        portfolio=portfolio_details,
+        trade_history=trade_history
+    )
+
+@app.route("/admin/adjust_balance", methods=["POST"])
+@login_required
+@handle_errors
+def adjust_balance():
+    # Ensure only admins can adjust balance
+    if not current_user.is_admin():
+        abort(403)  # Forbidden
+
+    user_id = request.form.get("user_id")
+    amount = request.form.get("amount")
+    action = request.form.get("action")  # "add" or "subtract"
+
+    # Validate inputs
+    if not user_id or not amount:
+        flash("Invalid input")
+        return redirect(url_for("admin_dashboard"))
+
+    try:
+        # Convert to Decimal
+        amount = Decimal(amount)
+        
+        # Ensure the admin can manage this user
+        if not current_user.can_manage_user(user_id):
+            abort(403)
+
+        # Prepare update operation with Decimal128
+        update_operation = (
+            {"$inc": {"balance": Decimal128(amount)}} 
+            if action == "add" 
+            else {"$inc": {"balance": Decimal128(-amount)}}
+        )
+
+        # Update user's balance and log the transaction
+        mongo.users.update_one(
+            {"_id": ObjectId(user_id)}, 
+            update_operation
+        )
+
+        # Log balance adjustment in trade history
+        mongo.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$push": {
+                "trade_history": {
+                    "type": f"admin_{action}_balance",
+                    "amount": float(amount),  # Convert to float for storage
+                    "timestamp": datetime.now(),
+                    "admin_id": current_user.get_id()
+                }
+            }}
+        )
+
+        flash(f"Balance {action}ed successfully")
+        return redirect(url_for("admin_dashboard"))
+
+    except (ValueError, TypeError):
+        flash("Invalid amount")
+        return redirect(url_for("admin_dashboard"))
+
+# Modify admin creation route
+@app.route("/create_admin", methods=["POST"])
+def create_admin():
+    # This should be a protected route, potentially with a master admin key
+    admin_key = request.form.get("admin_key")
+    email = request.form["email"].lower().strip()
+    password = request.form["password"]
+
+    # Validate master admin key (you should have a secure way to manage this)
+    if admin_key != "YOUR_SECURE_ADMIN_CREATION_KEY":
+        abort(403)
+
+    # Generate a unique invite code for this admin
+    invite_code = str(uuid.uuid4())
+
+    mongo.users.insert_one({
+        "email": email,
+        "password": generate_password_hash(password, method="pbkdf2:sha256"),
+        "account_type": "admin",
+        "invite_code": invite_code,
+        "managed_users": [],
+        "created_at": datetime.now(),
+        "last_login": None
+    })
+
+    return jsonify({
+        "message": "Admin created successfully", 
+        "invite_code": invite_code
+    })
+    
+def _calculate_portfolio_value(user_data):
+    """Helper function to calculate total portfolio value"""
+    portfolio = user_data.get("portfolio", {})
+    total_value = Decimal("0")
+
+    for symbol, position in portfolio.items():
+        if position["shares"] > 0:
+            try:
+                stock_info = stock_service.get_stock_info(symbol)
+                current_price = Decimal(str(stock_info['price']))
+                shares = Decimal(str(position["shares"]))
+                total_value += shares * current_price
+            except Exception:
+                # Handle potential errors in stock info retrieval
+                continue
+
+    return total_value
 
 @app.route("/buy_stock", methods=["POST"])
 @login_required

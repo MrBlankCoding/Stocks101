@@ -3,65 +3,77 @@
 User management
 {% endblock %}
 {% block content %}
-<h1>User Details for {{ user_email }}</h1>
+<div class="container mx-auto px-4 py-8 max-w-7xl">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">User Details for {{ user_email }}</h1>
 
-<section>
-    <h2>Account Summary</h2>
-    <p>Balance: ${{ balance }}</p>
-    <p>Total Portfolio Value: ${{ total_portfolio_value }}</p>
-</section>
+    <section class="bg-white shadow-md rounded-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">Account Summary</h2>
+        <div class="grid grid-cols-2 gap-4">
+            <p class="text-gray-600">Balance: <span class="font-bold text-green-600">${{ balance }}</span></p>
+            <p class="text-gray-600">Total Portfolio Value: <span class="font-bold text-blue-600">${{ total_portfolio_value }}</span></p>
+        </div>
+    </section>
 
-<section>
-    <h2>Portfolio</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Symbol</th>
-                <th>Company</th>
-                <th>Shares</th>
-                <th>Avg Price</th>
-                <th>Current Price</th>
-                <th>Market Value</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for stock in portfolio %}
-            <tr>
-                <td>{{ stock.symbol }}</td>
-                <td>{{ stock.company_name }}</td>
-                <td>{{ stock.shares }}</td>
-                <td>{{ stock.avg_price }}</td>
-                <td>{{ stock.current_price }}</td>
-                <td>{{ stock.market_value }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</section>
+    <section class="bg-white shadow-md rounded-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">Portfolio</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left text-gray-500">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3">Symbol</th>
+                        <th class="px-4 py-3">Company</th>
+                        <th class="px-4 py-3">Shares</th>
+                        <th class="px-4 py-3">Avg Price</th>
+                        <th class="px-4 py-3">Current Price</th>
+                        <th class="px-4 py-3">Market Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stock in portfolio %}
+                    <tr class="border-b hover:bg-gray-100 transition duration-200">
+                        <td class="px-4 py-3 font-medium text-gray-900">{{ stock.symbol }}</td>
+                        <td class="px-4 py-3">{{ stock.company_name }}</td>
+                        <td class="px-4 py-3">{{ stock.shares }}</td>
+                        <td class="px-4 py-3">${{ stock.avg_price }}</td>
+                        <td class="px-4 py-3">${{ stock.current_price }}</td>
+                        <td class="px-4 py-3 font-bold text-green-600">${{ stock.market_value }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-<section>
-    <h2>Trade History</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Type</th>
-                <th>Symbol</th>
-                <th>Shares</th>
-                <th>Price</th>
-                <th>Timestamp</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for trade in trade_history %}
-            <tr>
-                <td>{{ trade.type }}</td>
-                <td>{{ trade.symbol }}</td>
-                <td>{{ trade.shares }}</td>
-                <td>{{ trade.price }}</td>
-                <td>{{ trade.timestamp }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</section>
+    <section class="bg-white shadow-md rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-4">Trade History</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left text-gray-500">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3">Type</th>
+                        <th class="px-4 py-3">Symbol</th>
+                        <th class="px-4 py-3">Shares</th>
+                        <th class="px-4 py-3">Price</th>
+                        <th class="px-4 py-3">Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trade in trade_history %}
+                    <tr class="border-b hover:bg-gray-100 transition duration-200">
+                        <td class="px-4 py-3">
+                            <span class="{% if trade.type == 'Buy' %}text-green-600{% else %}text-red-600{% endif %}">
+                                {{ trade.type }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">{{ trade.symbol }}</td>
+                        <td class="px-4 py-3">{{ trade.shares }}</td>
+                        <td class="px-4 py-3">${{ trade.price }}</td>
+                        <td class="px-4 py-3 text-gray-500">{{ trade.timestamp }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
 {% endblock %}

@@ -272,7 +272,7 @@ class StockMarketService:
         """Get market hours information."""
         try:
             # Use Finnhub market hours lookup
-            market_status = self.finnhub_client.market_status()
+            market_status = self.finnhub_client.market_status(exchange='US')
             
             return {
                 "is_market_open": market_status.get('marketStatus') == 'open',
@@ -453,7 +453,6 @@ def admin_signup():
             return redirect(url_for("admin_signup"))
 
         # Check if admin registration key is valid 
-        # In a real-world scenario, this would be a secure, time-limited, or one-time use key
         if admin_registration_key != os.getenv("admin_registration_key"):
             flash("Invalid admin registration key")
             return redirect(url_for("admin_signup"))
@@ -467,17 +466,23 @@ def admin_signup():
         # Generate unique invite code for the admin's domain
         invite_code = str(uuid.uuid4())
 
-        # Create admin account
+        # Create admin account with all fields from normal registration
         admin_data = {
             "email": email,
             "password": generate_password_hash(password, method="pbkdf2:sha256"),
+            "balance": Decimal128(Decimal("10000.00")),
+            "portfolio": {},
+            "trade_history": [],
+            "created_at": datetime.now(),
+            "last_login": None,
             "account_type": "admin",
+            "login_attempts": 0,
+            
+            # Admin-specific fields
             "company_name": company_name,
             "invite_code": invite_code,
             "managed_users": [],
-            "admin_domain": None,  # The admin's own ID will be set as their domain
-            "created_at": datetime.now(),
-            "last_login": None,
+            "admin_domain": None,
             "registration_ip": request.remote_addr,
         }
 
@@ -485,17 +490,19 @@ def admin_signup():
         result = mongo.users.insert_one(admin_data)
         admin_id = str(result.inserted_id)
 
-        # Update the admin's domain to be their own ID
+        # Update the admin's domain to be their own ID and add themselves to managed_users
         mongo.users.update_one(
             {"_id": result.inserted_id},
-            {"$set": {"admin_domain": admin_id}}
+            {"$set": {
+                "admin_domain": admin_id,
+                "managed_users": [admin_id]  # Add admin's own ID to managed_users
+            }}
         )
 
         flash("Admin account created successfully")
         return redirect(url_for("login"))
 
     return render_template("admin_signup.html")
-
 
 @app.route("/login", methods=["GET", "POST"])
 def login():

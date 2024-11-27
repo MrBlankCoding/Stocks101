@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}
-Dashboard - StockDash Pro
+Dashboard - StockDash
 {% endblock %}
 {% block content %}
 <div class="min-h-screen bg-opacity-50">
@@ -38,7 +38,7 @@ Dashboard - StockDash Pro
             <p class="text-4xl font-extrabold text-blue-600">${{ "%.2f"|format(total_value) }}</p>
             <div class="text-sm text-gray-500 mt-2 flex items-center">
                <i class="fas fa-clock mr-2 text-gray-400"></i>
-               Last Calculated: {{ current_time }}
+               Last Calculated: Just Now
             </div>
          </div>
          <div class="bg-white rounded-xl shadow-lg p-6 border-l-6 {{ 'border-green-500' if net_profit > 0 else 'border-red-500' }} card-hover relative overflow-hidden">

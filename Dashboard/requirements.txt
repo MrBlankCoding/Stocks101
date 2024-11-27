@@ -7,3 +7,4 @@ finnhub-python
 flask_socketio
 python-dotenv
 scipy
+gunicorn

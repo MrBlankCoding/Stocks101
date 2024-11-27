@@ -2,31 +2,39 @@
 {% block title %}Admin Signup{% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+<div class="min-h-screen bg-gradient-to-br from-indigo-50 to-white flex flex-col justify-center py-12 sm:px-6 lg:px-8">
     <div class="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 class="mt-6 text-center text-4xl font-extrabold text-gray-900">
+        <div class="flex justify-center mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+        </div>
+        <h2 class="text-center text-4xl font-bold text-gray-900 tracking-tight">
             Create Admin Account
         </h2>
         <p class="mt-2 text-center text-sm text-gray-600">
-            Set up your organization's admin portal
+            Set up your organization's secure admin portal
         </p>
     </div>
 
-    <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div class="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10">
-            <form method="POST" action="{{ url_for('admin_signup') }}" class="space-y-6">
+    <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-md">
+        <div class="bg-white py-10 px-6 shadow-2xl sm:rounded-2xl">
+            <form method="POST" action="{{ url_for('admin_signup') }}" class="space-y-8" id="adminSignupForm">
                 <div>
                     <label for="company_name" class="block text-sm font-medium text-gray-700">
                         Company Name
                     </label>
-                    <div class="mt-1">
+                    <div class="mt-2">
                         <input 
                             type="text" 
                             id="company_name" 
                             name="company_name" 
                             required 
                             placeholder="Your organization's full name"
-                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                         >
                     </div>
                 </div>
@@ -35,7 +43,7 @@
                     <label for="email" class="block text-sm font-medium text-gray-700">
                         Email Address
                     </label>
-                    <div class="mt-1">
+                    <div class="mt-2">
                         <input 
                             type="email" 
                             id="email" 
@@ -44,7 +52,7 @@
                             placeholder="admin@yourcompany.com"
                             pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
                             title="Please enter a valid email address"
-                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                         >
                     </div>
                 </div>
@@ -53,7 +61,7 @@
                     <label for="password" class="block text-sm font-medium text-gray-700">
                         Password
                     </label>
-                    <div class="mt-1">
+                    <div class="mt-2">
                         <input 
                             type="password" 
                             id="password" 
@@ -63,9 +71,12 @@
                             pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#$%^&*]).{12,}"
                             title="Must be at least 12 characters long, contain uppercase and lowercase letters, a number, and a special character"
                             placeholder="Create a strong password"
-                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                         >
-                        <p class="mt-1 text-xs text-gray-500">
+                        <div id="password-strength" class="mt-2 h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                            <div id="password-strength-meter" class="h-full w-0 transition-all duration-500"></div>
+                        </div>
+                        <p id="password-strength-text" class="mt-2 text-xs text-gray-500">
                             At least 12 characters, including uppercase, lowercase, number, and symbol
                         </p>
                     </div>
@@ -75,48 +86,59 @@
                     <label for="confirm_password" class="block text-sm font-medium text-gray-700">
                         Confirm Password
                     </label>
-                    <div class="mt-1">
+                    <div class="mt-2">
                         <input 
                             type="password" 
                             id="confirm_password" 
                             name="confirm_password" 
                             required 
                             placeholder="Repeat your password"
-                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300"
                         >
                     </div>
                 </div>
 
                 <div>
-                    <label for="admin_registration_key" class="block text-sm font-medium text-gray-700">
+                    <label for="unique_admin_id" class="block text-sm font-medium text-gray-700">
                         Admin Registration Key
+                        <span 
+                            class="ml-2 inline-block cursor-help text-gray-500 hover:text-indigo-600"
+                            title="A unique key provided by your organization's IT department to verify your admin status"
+                        >
+                            ⓘ
+                        </span>
                     </label>
-                    <div class="mt-1">
+                    <div class="mt-2 relative">
                         <input 
                             type="text" 
-                            id="admin_registration_key" 
-                            name="admin_registration_key" 
+                            id="unique_admin_id" 
+                            name="unique_admin_id" 
                             required 
                             placeholder="Enter your unique registration key"
-                            class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-300 pr-10"
                         >
-                        <p class="mt-1 text-xs text-gray-500">
-                            Contact your organization's IT department to obtain this key
-                        </p>
+                        <button 
+                            type="button" 
+                            id="copy-registration-key" 
+                            class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-indigo-600"
+                            title="Copy registration key"
+                        >
+                            📋
+                        </button>
                     </div>
                 </div>
 
                 <div>
                     <button 
                         type="submit" 
-                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 ease-in-out transform hover:scale-101"
                     >
                         Create Admin Account
                     </button>
                 </div>
             </form>
 
-            <div class="mt-6">
+            <div class="mt-8">
                 <div class="relative">
                     <div class="absolute inset-0 flex items-center">
                         <div class="w-full border-t border-gray-300"></div>
@@ -131,7 +153,7 @@
                 <div class="mt-6">
                     <a 
                         href="{{ url_for('login') }}" 
-                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-indigo-600 bg-white hover:bg-gray-50"
+                        class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-indigo-600 bg-white border-indigo-300 hover:bg-gray-50"
                     >
                         Sign in
                     </a>
@@ -139,12 +161,9 @@
             </div>
         </div>
 
-        <div class="mt-6 text-center text-sm text-gray-500">
+        <div class="mt-8 text-center text-sm text-gray-500">
             <p>
                 Note: Admin accounts are used to manage users within your organization.
-            </p>
-            <p class="mt-1">
-                Each admin receives a unique invite code to onboard users to their domain.
             </p>
         </div>
     </div>
@@ -154,13 +173,53 @@
 document.addEventListener('DOMContentLoaded', function() {
     const password = document.getElementById('password');
     const confirmPassword = document.getElementById('confirm_password');
+    const passwordStrengthMeter = document.getElementById('password-strength-meter');
+    const passwordStrengthText = document.getElementById('password-strength-text');
+    const copyRegistrationKeyBtn = document.getElementById('copy-registration-key');
 
-    confirmPassword.addEventListener('input', function() {
-        if (password.value !== confirmPassword.value) {
-            confirmPassword.setCustomValidity('Passwords do not match');
-        } else {
-            confirmPassword.setCustomValidity('');
+    // Password strength indicator
+    password.addEventListener('input', function() {
+        const value = password.value;
+        let strength = 0;
+        let strengthText = '';
+
+        if (value.length >= 12) strength++;
+        if (/[a-z]/.test(value)) strength++;
+        if (/[A-Z]/.test(value)) strength++;
+        if (/\d/.test(value)) strength++;
+        if (/[!@#$%^&*]/.test(value)) strength++;
+
+        passwordStrengthMeter.style.width = `${strength * 20}%`;
+        passwordStrengthMeter.className = `h-full transition-all duration-500 ${
+            strength <= 2 ? 'bg-red-500' : 
+            strength <= 3 ? 'bg-yellow-500' : 
+            'bg-green-500'
+        }`;
+
+        switch(strength) {
+            case 0:
+            case 1:
+            case 2:
+                strengthText = 'Weak password';
+                break;
+            case 3:
+                strengthText = 'Medium strength';
+                break;
+            case 4:
+            case 5:
+                strengthText = 'Strong password';
+                break;
         }
+
+        passwordStrengthText.textContent = strengthText;
+    });
+
+    // Copy registration key
+    copyRegistrationKeyBtn.addEventListener('click', function() {
+        const registrationKeyInput = document.getElementById('unique_admin_id');
+        registrationKeyInput.select();
+        document.execCommand('copy');
+        alert('Registration key copied to clipboard');
     });
 });
 </script>

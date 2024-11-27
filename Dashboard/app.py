@@ -363,7 +363,6 @@ def validate_stock_input(f):
     return decorated_function
 
 
-# Enhanced routes with better error handling and validation
 @app.route("/register", methods=["GET", "POST"])
 @handle_errors
 def register():
@@ -396,7 +395,7 @@ def register():
                 flash("Invalid admin invite code")
                 return redirect(url_for("register"))
 
-        # Create user with admin domain if applicable
+        # Create user data
         user_data = {
             "email": email,
             "password": generate_password_hash(password, method="pbkdf2:sha256"),
@@ -412,13 +411,15 @@ def register():
         # If registering through admin invite, set admin domain
         if admin_user:
             user_data["admin_domain"] = str(admin_user["_id"])
-            # Update admin's managed users
+
+        # Insert the new user into the database
+        new_user = mongo.users.insert_one(user_data)
+
+        if admin_user:
             mongo.users.update_one(
                 {"_id": admin_user["_id"]},
-                {"$push": {"managed_users": str(user_data["_id"])}}
+                {"$push": {"managed_users": str(new_user.inserted_id)}}
             )
-
-        mongo.users.insert_one(user_data)
 
         flash("Registration successful")
         return redirect(url_for("login"))
@@ -1106,6 +1107,11 @@ def trade_history():
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template("404.html"), 404
+
+@app.errorhandler(403)
+def forbidden_error(error):
+    return render_template("403.html"), 403
+
 
 
 @app.errorhandler(500)

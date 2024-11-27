@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}
+403 - Forbidden
+{% endblock %}
+{% block content %}
+<div class="text-center">
+   <div class="mb-8">
+      <!-- Icon or chart graphic -->
+      <div class="relative">
+         <svg class="w-24 h-24 mx-auto text-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v20M5 12h14" />
+         </svg>
+      </div>
+   </div>
+   <h1 class="text-4xl font-bold text-gray-800 mb-4">403 - Forbidden</h1>
+   <p class="text-lg text-gray-600 mb-6">You don't have permission to access this page. 🚫</p>
+   <p class="text-lg text-gray-600 mb-6">Looks like you’ve hit a roadblock.</p>
+   <a href="/" class="px-6 py-3 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">
+   Go Back to Dashboard
+   </a>
+</div>
+{% endblock %}

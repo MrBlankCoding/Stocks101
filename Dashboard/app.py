@@ -620,7 +620,7 @@ def admin_dashboard():
         user_summary = {
             "id": str(user["_id"]),
             "email": user["email"],
-            "balance": float(user.get("balance", "0")),  # Convert to float
+            "balance": float(user.get("balance", Decimal128("0")).to_decimal()),
             "portfolio_value": _calculate_portfolio_value(user),
             "total_trades": len(user.get("trade_history", [])),
             "last_login": user.get("last_login")

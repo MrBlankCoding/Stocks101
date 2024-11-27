@@ -104,6 +104,75 @@ def async_route(f):
 
     return decorated_function
 
+def validate_stock_input(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        data = request.json
+        required_fields = ["symbol", "shares", "price"]
+
+        # Validate required fields
+        if not all(field in data for field in required_fields):
+            return (
+                jsonify({"success": False, "error": "Missing required fields"}),
+                400,
+            )
+
+        # Validate symbol format
+        if not re.match(r"^[A-Z]{1,5}$", data["symbol"].upper()):
+            return (
+                jsonify({"success": False, "error": "Invalid symbol format"}),
+                400,
+            )
+
+        # Validate numeric values
+        try:
+            shares = float(data["shares"])
+            price = float(data["price"])
+            if shares <= 0 or price <= 0:
+                raise ValueError
+        except ValueError:
+            return (
+                jsonify({"success": False, "error": "Invalid numeric values"}),
+                400,
+            )
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+# API rate limiting
+def rate_limit(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user_id = current_user.get_id()
+        current_time = datetime.now()
+
+        # Check rate limit (100 requests per minute)
+        rate_limit_key = f"rate_limit:{user_id}"
+        request_times = mongo.rate_limits.find_one({"_id": rate_limit_key})
+
+        if request_times:
+            times = request_times["times"]
+            # Remove timestamps older than 1 minute
+            times = [t for t in times if (current_time - t).total_seconds() < 60]
+
+            if len(times) >= 100:
+                return jsonify({"error": "Rate limit exceeded"}), 429
+
+            times.append(current_time)
+            mongo.rate_limits.update_one(
+                {"_id": rate_limit_key}, {"$set": {"times": times}}
+            )
+        else:
+            mongo.rate_limits.insert_one(
+                {"_id": rate_limit_key, "times": [current_time]}
+            )
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
 
 # Create a JSON encoder that handles Decimal
 class CustomJSONEncoder(json.JSONEncoder):
@@ -1024,77 +1093,6 @@ def trade_history():
         has_prev=page > 1,
         has_next=page < total_pages,
     )
-
-
-def validate_stock_input(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        data = request.json
-        required_fields = ["symbol", "shares", "price"]
-
-        # Validate required fields
-        if not all(field in data for field in required_fields):
-            return (
-                jsonify({"success": False, "error": "Missing required fields"}),
-                400,
-            )
-
-        # Validate symbol format
-        if not re.match(r"^[A-Z]{1,5}$", data["symbol"].upper()):
-            return (
-                jsonify({"success": False, "error": "Invalid symbol format"}),
-                400,
-            )
-
-        # Validate numeric values
-        try:
-            shares = float(data["shares"])
-            price = float(data["price"])
-            if shares <= 0 or price <= 0:
-                raise ValueError
-        except ValueError:
-            return (
-                jsonify({"success": False, "error": "Invalid numeric values"}),
-                400,
-            )
-
-        return f(*args, **kwargs)
-
-    return decorated_function
-
-
-# API rate limiting
-def rate_limit(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        user_id = current_user.get_id()
-        current_time = datetime.now()
-
-        # Check rate limit (100 requests per minute)
-        rate_limit_key = f"rate_limit:{user_id}"
-        request_times = mongo.rate_limits.find_one({"_id": rate_limit_key})
-
-        if request_times:
-            times = request_times["times"]
-            # Remove timestamps older than 1 minute
-            times = [t for t in times if (current_time - t).total_seconds() < 60]
-
-            if len(times) >= 100:
-                return jsonify({"error": "Rate limit exceeded"}), 429
-
-            times.append(current_time)
-            mongo.rate_limits.update_one(
-                {"_id": rate_limit_key}, {"$set": {"times": times}}
-            )
-        else:
-            mongo.rate_limits.insert_one(
-                {"_id": rate_limit_key, "times": [current_time]}
-            )
-
-        return f(*args, **kwargs)
-
-    return decorated_function
-
 
 if __name__ == "__main__":
     app.run(debug=True, port=8080, host="0.0.0.0")

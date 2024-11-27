@@ -130,12 +130,10 @@ class User(UserMixin):
         self.account_type = user_data.get("account_type", "basic")
         
         # New admin-related fields
+        self.admin_domain = user_data.get("admin_domain", None)
         self.managed_users = user_data.get("managed_users", [])
         self.company_name = user_data.get("company_name")  # New field for admin's company
         self.invite_code = user_data.get("invite_code")
-        
-        # New unique admin ID field
-        self.unique_admin_id = user_data.get("unique_admin_id")
 
     def is_admin(self):
         return self.account_type == "admin"
@@ -372,7 +370,7 @@ def register():
     if request.method == "POST":
         email = request.form["email"].lower().strip()
         password = request.form["password"]
-        unique_admin_id = request.form.get("unique_admin_id", "")
+        admin_invite_code = request.form.get("admin_invite_code", "")
 
         # Enhanced input validation
         if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email):
@@ -389,10 +387,10 @@ def register():
 
         # Check admin invite code if provided
         admin_user = None
-        if unique_admin_id:
+        if admin_invite_code:
             admin_user = mongo.users.find_one({
                 "account_type": "admin", 
-                "invite_code": unique_admin_id
+                "invite_code": admin_invite_code
             })
             if not admin_user:
                 flash("Invalid admin invite code")
@@ -413,7 +411,7 @@ def register():
 
         # If registering through admin invite, set admin domain
         if admin_user:
-            user_data["unique_admin_id"] = str(admin_user["_id"])
+            user_data["admin_domain"] = str(admin_user["_id"])
             # Update admin's managed users
             mongo.users.update_one(
                 {"_id": admin_user["_id"]},
@@ -435,7 +433,7 @@ def admin_signup():
         email = request.form["email"].lower().strip()
         password = request.form["password"]
         confirm_password = request.form["confirm_password"]
-        unique_admin_id = request.form["unique_admin_id"].strip()
+        admin_registration_key = request.form["admin_registration_key"]
 
         # Validation checks
         if not company_name:
@@ -454,21 +452,15 @@ def admin_signup():
             flash("Password must be at least 12 characters long")
             return redirect(url_for("admin_signup"))
 
+        # Check if admin registration key is valid 
+        if admin_registration_key != os.getenv("admin_registration_key"):
+            flash("Invalid admin registration key")
+            return redirect(url_for("admin_signup"))
+
         # Check if email already exists
         existing_user = mongo.users.find_one({"email": email})
         if existing_user:
             flash("Email already exists")
-            return redirect(url_for("admin_signup"))
-
-        # Check if unique admin ID is already taken
-        existing_admin_id = mongo.users.find_one({"unique_admin_id": unique_admin_id})
-        if existing_admin_id:
-            flash("This Admin ID is already in use")
-            return redirect(url_for("admin_signup"))
-
-        # Validate unique admin ID
-        if not re.match(r'^[a-zA-Z0-9_-]{3,20}$', unique_admin_id):
-            flash("Admin ID must be 3-20 characters long and contain only letters, numbers, underscores, and hyphens")
             return redirect(url_for("admin_signup"))
 
         # Generate unique invite code for the admin's domain
@@ -490,10 +482,8 @@ def admin_signup():
             "company_name": company_name,
             "invite_code": invite_code,
             "managed_users": [],
+            "admin_domain": None,
             "registration_ip": request.remote_addr,
-            
-            # New unique admin ID field
-            "unique_admin_id": unique_admin_id
         }
 
         # Insert admin user
@@ -504,7 +494,7 @@ def admin_signup():
         mongo.users.update_one(
             {"_id": result.inserted_id},
             {"$set": {
-                "unique_admin_id": admin_id,
+                "admin_domain": admin_id,
                 "managed_users": [admin_id]  # Add admin's own ID to managed_users
             }}
         )
@@ -611,17 +601,17 @@ async def dashboard():
         account_type=current_user.account_type,
     )
 
-@app.route("/admin/manage_users")
+@app.route("/admin/dashboard")
 @login_required
 @handle_errors
-def manage_users():
+def admin_dashboard():
     # Ensure only admins can access
     if not current_user.is_admin():
         abort(403)  # Forbidden
 
     # Fetch users in admin's domain
     managed_users = mongo.users.find({
-        "unique_admin_id": current_user.get_id()
+        "admin_domain": current_user.get_id()
     })
 
     # Prepare user data for display
@@ -638,7 +628,7 @@ def manage_users():
         user_list.append(user_summary)
 
     return render_template(
-        "manage_users.html", 
+        "admin_dashboard.html", 
         users=user_list
     )
 
@@ -1116,6 +1106,12 @@ def trade_history():
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template("404.html"), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    db_manager.client.session.rollback()  # Rollback the session in case of database error
+    return render_template("500.html"), 500
 
 
 # API rate limiting

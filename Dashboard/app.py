@@ -7,9 +7,10 @@ import re
 import json
 import uuid
 from functools import wraps
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Any
 from asyncio import run
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 # Third-party library imports
 from dotenv import load_dotenv
@@ -632,6 +633,171 @@ def _calculate_portfolio_value(user_data):
 
     return total_value
 
+# Constants
+CACHE_TIMEOUT = 60  # seconds
+
+class StockMarketService:
+    def __init__(self, finnhub_api_key: str = None):
+        """
+        Initialize StockMarketService with API keys and configurations.
+        
+        Args:
+            finnhub_api_key (str, optional): Finnhub API key. 
+                                             If not provided, attempts to use environment variable.
+        """
+        api_key = finnhub_api_key or os.getenv("FINNHUB_API_KEY")
+        if not api_key:
+            raise ValueError("No Finnhub API key provided. Set FINNHUB_API_KEY environment variable.")
+        
+        self.finnhub_client = finnhub.Client(api_key=api_key)
+        self.cache: Dict[str, Dict[str, Any]] = {}
+        self.executor = ThreadPoolExecutor()
+
+    def _update_cache(self, key: str, value: Any) -> None:
+        """Update cache with a timestamp."""
+        self.cache[key] = {"data": value, "timestamp": datetime.now()}
+
+    def _get_cached(self, key: str) -> Optional[Any]:
+        """Retrieve data from the cache if valid."""
+        cached_entry = self.cache.get(key)
+        if cached_entry:
+            if (datetime.now() - cached_entry["timestamp"]).seconds < CACHE_TIMEOUT:
+                return cached_entry["data"]
+            else:
+                # Expire old cache
+                del self.cache[key]
+        return None
+
+    async def _fetch_yf_data(self, symbol: str, method: str, *args, **kwargs) -> Any:
+        """Fetch data asynchronously using yfinance."""
+        try:
+            if method == "info":
+                return yf.Ticker(symbol).info  # Directly return info as it is not a callable method
+            return await asyncio.get_event_loop().run_in_executor(
+                self.executor, lambda: getattr(yf.Ticker(symbol), method)(*args, **kwargs)
+            )
+        except Exception as e:
+            logger.error(f"Error fetching {method} for {symbol} via yfinance: {e}")
+            return None
+
+    async def get_stock_price(self, symbol: str) -> Optional[float]:
+        """Fetch the latest stock price, prioritizing Finnhub."""
+        cache_key = f"{symbol}_price"
+        cached_price = self._get_cached(cache_key)
+        if cached_price is not None:
+            return cached_price
+
+        # Try Finnhub API
+        try:
+            quote = self.finnhub_client.quote(symbol)
+            if quote and (current_price := quote.get("c")):
+                price = float(current_price)
+                self._update_cache(cache_key, price)
+                return price
+        except Exception as e:
+            logger.warning(f"Finnhub API failed for {symbol}: {e}")
+
+        # Fallback to Yahoo Finance
+        try:
+            history = await self._fetch_yf_data(symbol, "history", period="1d")
+            if history is not None and not history.empty:
+                price = float(history["Close"].iloc[-1])
+                self._update_cache(cache_key, price)
+                return price
+        except Exception as e:
+            logger.error(f"YFinance API failed for {symbol}: {e}")
+
+        return None
+
+    async def get_stock_price_history(
+        self, symbol: str, period: str = "1mo", interval: str = "1d"
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Fetch historical stock prices for a given symbol."""
+        cache_key = f"{symbol}_history_{period}_{interval}"
+        cached_history = self._get_cached(cache_key)
+        if cached_history is not None:
+            return cached_history
+
+        try:
+            history = await self._fetch_yf_data(symbol, "history", period=period, interval=interval)
+            if history is not None and not history.empty:
+                historical_data = [
+                    {"date": index.strftime("%Y-%m-%d"), "price": float(row["Close"]), "volume": int(row["Volume"])}
+                    for index, row in history.iterrows()
+                ]
+                self._update_cache(cache_key, historical_data)
+                return historical_data
+        except Exception as e:
+            logger.error(f"Failed to fetch historical data for {symbol}: {e}")
+
+        return None
+
+    async def get_stock_info(self, symbol: str) -> Optional[Dict]:
+        """Fetch comprehensive stock information."""
+        try:
+            price = await self.get_stock_price(symbol)
+            if price is None:
+                logger.error(f"Price data unavailable for {symbol}.")
+                return None
+
+            stock_info = {"symbol": symbol, "price": price, "last_updated": datetime.now().isoformat()}
+            profile, financials = {}, {}
+
+            # Try Finnhub API
+            try:
+                profile = self.finnhub_client.company_profile2(symbol=symbol)
+                financials = self.finnhub_client.company_basic_financials(symbol=symbol, metric="all")
+            except Exception as e:
+                logger.warning(f"Finnhub profile/financials fetch failed for {symbol}: {e}")
+
+            # Try YFinance fallback
+            try:
+                info = await self._fetch_yf_data(symbol, "info")
+                history = await self.get_stock_price_history(symbol, period="1mo")
+
+                stock_info.update({
+                    "company_name": profile.get("name", info.get("longName", "")),
+                    "market_cap": profile.get("marketCapitalization", info.get("marketCap", 0)),
+                    "pe_ratio": financials.get("metric", {}).get("peBasicExclExtraTTM", info.get("trailingPE", 0)),
+                    "sector": profile.get("finnhubIndustry", info.get("sector", "N/A")),
+                    "exchange": profile.get("exchange", info.get("exchange", "N/A")),
+                    "currency": profile.get("currency", "USD"),
+                    "fifty_two_week_high": financials.get("metric", {}).get("52WeekHigh", info.get("fiftyTwoWeekHigh", 0)),
+                    "fifty_two_week_low": financials.get("metric", {}).get("52WeekLow", info.get("fiftyTwoWeekLow", 0)),
+                    "price_history": history,
+                    "website": profile.get("weburl", info.get("website", "")),
+                    "description": profile.get("description", info.get("longBusinessSummary", "")),
+                    "volume": info.get("volume", 0),
+                })
+            except Exception as e:
+                logger.error(f"YFinance fallback failed for {symbol}: {e}")
+
+            return stock_info
+        except Exception as e:
+            logger.error(f"Failed to fetch stock info for {symbol}: {e}")
+            return None
+
+    async def get_market_news(self, category: str = "general", min_id: int = 0) -> List[Dict]:
+        """Fetch general market news from Finnhub."""
+        try:
+            news = self.finnhub_client.general_news(category=category, min_id=min_id)
+            return [
+                {
+                    "headline": article.get("headline"),
+                    "source": article.get("source"),
+                    "url": article.get("url"),
+                    "summary": article.get("summary"),
+                    "image": article.get("image"),
+                    "datetime": datetime.fromtimestamp(article["datetime"]).isoformat(),
+                }
+                for article in news
+            ]
+        except Exception as e:
+            logger.error(f"Error fetching market news: {e}")
+            return []
+
+        
+stock_service = StockMarketService(finnhub_api_key=os.getenv("FINNHUB_API_KEY"))
 
 @app.route("/dashboard")
 @login_required
@@ -676,190 +842,59 @@ async def dashboard():
                     "profit_loss_percent": (
                         (current_price - avg_price) / avg_price * 100
                     ).quantize(Decimal("0.01")),
+                    
+                    # New enhanced stock information from StockMarketService
                     "company_name": stock_info.get("company_name", symbol),
                     "sector": stock_info.get("sector", "N/A"),
                     "pe_ratio": stock_info.get("pe_ratio", 0),
-                    "dividend_yield": stock_info.get("dividend_yield", 0),
                     "market_cap": stock_info.get("market_cap", 0),
+                    "exchange": stock_info.get("exchange", "N/A"),
+                    "currency": stock_info.get("currency", "USD"),
+                    
+                    # Additional financial metrics
+                    "fifty_two_week_high": stock_info.get("fifty_two_week_high", 0),
+                    "fifty_two_week_low": stock_info.get("fifty_two_week_low", 0),
+                    
+                    # Detailed price history
                     "price_history": stock_info.get("price_history", []),
+                    
+                    # Company description and website
+                    "description": stock_info.get("description", ""),
+                    "website": stock_info.get("website", ""),
+                    
+                    # Volume and last updated timestamp
+                    "volume": stock_info.get("volume", 0),
                     "last_updated": stock_info.get("last_updated", datetime.now()),
                 }
             )
 
+    # Sort portfolio by market value
+    portfolio_data.sort(key=lambda x: x["market_value"], reverse=True)
+
+    # Calculate total portfolio metrics
     total_value = balance + total_portfolio_value
     initial_balance = Decimal("10000.00")
     net_profit = total_value - initial_balance
 
+    # Fetch some market news for dashboard context
+    try:
+        market_news = await stock_service.get_market_news()
+    except Exception:
+        market_news = []
+
     return render_template(
         "dashboard.html",
-        portfolio=sorted(portfolio_data, key=lambda x: x["market_value"], reverse=True),
+        portfolio=portfolio_data,
         balance=balance,
         total_value=total_value,
         net_profit=net_profit,
         net_profit_percent=(net_profit / initial_balance * 100).quantize(
             Decimal("0.01")
         ),
+        market_news=market_news,  # New addition of market news
         last_updated=datetime.now(),
         account_type=current_user.account_type,
     )
-
-
-class StockMarketService:
-    def __init__(self, finnhub_api_key: str):
-        self.finnhub_client = finnhub.Client(os.getenv("FINNHUB_API_KEY"))
-        self.cache = {}
-        self.cache_timeout = 60  # seconds
-
-    async def get_stock_price(self, symbol: str) -> Optional[float]:
-        cache_key = f"{symbol}_price"
-        cached_data = self.cache.get(cache_key)
-        if (
-            cached_data
-            and (datetime.now() - cached_data["timestamp"]).seconds < self.cache_timeout
-        ):
-            return cached_data["price"]
-
-        try:
-            # Try Finnhub quote first
-            quote = self.finnhub_client.quote(symbol)
-            if quote and quote.get("c"):  # Current price
-                price = float(quote["c"])
-            else:
-                raise ValueError("No price data from Finnhub")
-        except Exception as finnhub_error:
-            logger.warning(f"Finnhub API failed for {symbol}: {finnhub_error}")
-            try:
-                # Fallback to Yahoo Finance
-                stock = yf.Ticker(symbol)
-                price = float(stock.history(period="1d")["Close"].iloc[-1])
-            except Exception as yf_error:
-                logger.error(f"Both APIs failed for {symbol}: {yf_error}")
-                return None
-
-        # Update cache
-        self.cache[cache_key] = {"price": price, "timestamp": datetime.now()}
-        return price
-
-    async def get_stock_info(self, symbol: str) -> Dict:
-        """Get detailed stock information using both Finnhub and YFinance data."""
-        try:
-            # Get the current price first
-            price = await self.get_stock_price(symbol)
-            if not price:
-                raise ValueError(f"Could not fetch price for {symbol}")
-
-            # Try to get details from Finnhub
-            try:
-                # Fetch company profile
-                profile = self.finnhub_client.company_profile2(symbol=symbol)
-
-                # Fetch company financials
-                financials = self.finnhub_client.company_basic_financials(
-                    symbol=symbol, metric="all"
-                )
-            except Exception as finnhub_error:
-                logger.warning(
-                    f"Finnhub API failed for ticker details {symbol}: {finnhub_error}"
-                )
-                profile = {}
-                financials = {}
-
-            # Get additional info from YFinance as backup or supplement
-            try:
-                stock = yf.Ticker(symbol)
-                info = stock.info
-
-                # Merge Finnhub and YFinance data
-                stock_info = {
-                    "symbol": symbol,
-                    "price": price,
-                    "company_name": profile.get("name") or info.get("longName", ""),
-                    "market_cap": profile.get("marketCapitalization")
-                    or info.get("marketCap", 0),
-                    "pe_ratio": financials.get("metric", {}).get("peBasicExclExtraTTM")
-                    or info.get("trailingPE", 0),
-                    "volume": info.get("volume", 0),
-                    "sector": profile.get("finnhubIndustry") or info.get("sector", ""),
-                    "industry": profile.get("finnhubIndustry")
-                    or info.get("industry", ""),
-                    "website": profile.get("weburl") or info.get("website", ""),
-                    "description": profile.get("description")
-                    or info.get("longBusinessSummary", ""),
-                    "currency": profile.get("currency") or info.get("currency", "USD"),
-                    "exchange": profile.get("exchange") or info.get("exchange", ""),
-                    "fifty_two_week_high": financials.get("metric", {}).get(
-                        "52WeekHigh"
-                    )
-                    or info.get("fiftyTwoWeekHigh", 0),
-                    "fifty_two_week_low": financials.get("metric", {}).get("52WeekLow")
-                    or info.get("fiftyTwoWeekLow", 0),
-                    "dividend_yield": financials.get("metric", {}).get(
-                        "dividendYieldTTM"
-                    )
-                    or info.get("dividendYield", 0),
-                    "beta": financials.get("metric", {}).get("beta")
-                    or info.get("beta", 0),
-                    "last_updated": datetime.now().isoformat(),
-                }
-
-                # Get historical data for price chart
-                hist = stock.history(period="1mo")
-                price_history = [
-                    {
-                        "date": index.strftime("%Y-%m-%d"),
-                        "price": float(row["Close"]),
-                        "volume": float(row["Volume"]),
-                    }
-                    for index, row in hist.iterrows()
-                ]
-                stock_info["price_history"] = price_history
-
-                return stock_info
-
-            except Exception as yf_error:
-                logger.error(f"YFinance API failed for {symbol}: {yf_error}")
-                # Return basic info if YFinance fails but we have price
-                return {
-                    "symbol": symbol,
-                    "price": price,
-                    "company_name": profile.get("name") or symbol,
-                    "market_cap": profile.get("marketCapitalization") or 0,
-                    "last_updated": datetime.now().isoformat(),
-                }
-
-        except Exception as e:
-            logger.error(f"Error fetching stock info for {symbol}: {e}")
-            return None
-
-    async def get_market_hours(self, symbol: str) -> Dict:
-        """Get market hours information."""
-        try:
-            # Use Finnhub market hours lookup
-            market_status = self.finnhub_client.market_status(exchange="US")
-
-            return {
-                "is_market_open": market_status.get("marketStatus") == "open",
-                "market": market_status.get("market", "US"),
-            }
-        except Exception as e:
-            logger.warning(f"Could not fetch market hours from Finnhub: {e}")
-            # Fallback to basic US market hours
-            now = datetime.now().astimezone()
-            is_weekday = now.weekday() < 5
-            market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
-            market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
-            return {
-                "is_market_open": is_weekday and market_open <= now <= market_close,
-                "next_open": market_open,
-                "next_close": market_close,
-            }
-
-
-# Update stock service initialization
-stock_service = StockMarketService(
-    os.getenv("FINNHUB_API_KEY")  # Change from POLYGON_API_KEY to FINNHUB_API_KEY
-)
-
 
 @app.route("/get_stock_info/<symbol>")
 @login_required
@@ -894,9 +929,7 @@ async def buy_stock():
 
     # Verify current price
     current_price = await stock_service.get_stock_price(symbol)
-    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal(
-        "0.02"
-    ):
+    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal("0.02"):
         return jsonify(
             {
                 "success": False,
@@ -936,17 +969,11 @@ async def buy_stock():
                 {
                     "$set": {
                         f"portfolio.{symbol}": {
-                            "shares": float(
-                                total_shares
-                            ),  # Convert to float for MongoDB
-                            "avg_price": float(
-                                new_avg_price
-                            ),  # Convert to float for MongoDB
+                            "shares": float(total_shares),  # Convert to float for MongoDB
+                            "avg_price": float(new_avg_price),  # Convert to float for MongoDB
                             "last_updated": datetime.now(),
                         },
-                        "balance": float(
-                            current_balance - total_cost
-                        ),  # Convert to float for MongoDB
+                        "balance": float(current_balance - total_cost),  # Convert to float for MongoDB
                     },
                     "$push": {
                         "trade_history": {
@@ -991,9 +1018,7 @@ async def sell_stock():
 
     # Verify current price
     current_price = await stock_service.get_stock_price(symbol)
-    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal(
-        "0.02"
-    ):
+    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal("0.02"):
         return jsonify(
             {
                 "success": False,
@@ -1004,7 +1029,7 @@ async def sell_stock():
     total_value = shares * price
 
     # Use MongoDB transaction for atomicity
-    with db_manager.client.start_session() as session:  # Use db_manager.client here
+    with db_manager.client.start_session() as session:
         with session.start_transaction():
             user_data = mongo.users.find_one({"_id": ObjectId(current_user.get_id())})
             portfolio = user_data.get("portfolio", {})
@@ -1063,7 +1088,6 @@ async def sell_stock():
             },
         }
     )
-
 
 @app.route("/trade_history")
 @login_required

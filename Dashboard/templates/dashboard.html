@@ -230,38 +230,8 @@ Dashboard - StockDash
    </main>
 </div>
 <script>
-   // Enhanced WebSocket and Real-Time Updates
-   const socket = io();
    let connectionAttempts = 0;
    let currentPriceHistoryChart = null;
-   
-   socket.on('connect', () => {
-       connectionAttempts = 0;
-       document.getElementById('connection-status').innerHTML = 
-           '<i class="fas fa-wifi mr-1"></i>Connected';
-   });
-   
-   socket.on('disconnect', () => {
-       document.getElementById('connection-status').innerHTML = 
-           '<i class="fas fa-wifi-slash mr-1 text-red-500"></i>Disconnected';
-       attemptReconnection();
-   });
-   
-   function attemptReconnection() {
-       if (connectionAttempts < 5) {
-           setTimeout(() => {
-               connectionAttempts++;
-               socket.connect();
-           }, 2000 * connectionAttempts);
-       }
-   }
-   
-   // Price Update Handling
-   socket.on('price_updates', function(updates) {
-       for (const [symbol, priceData] of Object.entries(updates)) {
-           updatePrice(symbol, priceData.price, priceData.change);
-       }
-   });
    async function updateTotalPrice() {
        const shares = document.getElementById('shares').value;
        const priceElement = document.getElementById('current-price');

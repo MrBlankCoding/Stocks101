@@ -105,6 +105,7 @@ def async_route(f):
 
     return decorated_function
 
+
 def validate_stock_input(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -633,22 +634,26 @@ def _calculate_portfolio_value(user_data):
 
     return total_value
 
+
 # Constants
 CACHE_TIMEOUT = 60  # seconds
+
 
 class StockMarketService:
     def __init__(self, finnhub_api_key: str = None):
         """
         Initialize StockMarketService with API keys and configurations.
-        
+
         Args:
-            finnhub_api_key (str, optional): Finnhub API key. 
+            finnhub_api_key (str, optional): Finnhub API key.
                                              If not provided, attempts to use environment variable.
         """
         api_key = finnhub_api_key or os.getenv("FINNHUB_API_KEY")
         if not api_key:
-            raise ValueError("No Finnhub API key provided. Set FINNHUB_API_KEY environment variable.")
-        
+            raise ValueError(
+                "No Finnhub API key provided. Set FINNHUB_API_KEY environment variable."
+            )
+
         self.finnhub_client = finnhub.Client(api_key=api_key)
         self.cache: Dict[str, Dict[str, Any]] = {}
         self.executor = ThreadPoolExecutor()
@@ -672,9 +677,12 @@ class StockMarketService:
         """Fetch data asynchronously using yfinance."""
         try:
             if method == "info":
-                return yf.Ticker(symbol).info  # Directly return info as it is not a callable method
+                return yf.Ticker(
+                    symbol
+                ).info  # Directly return info as it is not a callable method
             return await asyncio.get_event_loop().run_in_executor(
-                self.executor, lambda: getattr(yf.Ticker(symbol), method)(*args, **kwargs)
+                self.executor,
+                lambda: getattr(yf.Ticker(symbol), method)(*args, **kwargs),
             )
         except Exception as e:
             logger.error(f"Error fetching {method} for {symbol} via yfinance: {e}")
@@ -719,10 +727,16 @@ class StockMarketService:
             return cached_history
 
         try:
-            history = await self._fetch_yf_data(symbol, "history", period=period, interval=interval)
+            history = await self._fetch_yf_data(
+                symbol, "history", period=period, interval=interval
+            )
             if history is not None and not history.empty:
                 historical_data = [
-                    {"date": index.strftime("%Y-%m-%d"), "price": float(row["Close"]), "volume": int(row["Volume"])}
+                    {
+                        "date": index.strftime("%Y-%m-%d"),
+                        "price": float(row["Close"]),
+                        "volume": int(row["Volume"]),
+                    }
                     for index, row in history.iterrows()
                 ]
                 self._update_cache(cache_key, historical_data)
@@ -740,35 +754,59 @@ class StockMarketService:
                 logger.error(f"Price data unavailable for {symbol}.")
                 return None
 
-            stock_info = {"symbol": symbol, "price": price, "last_updated": datetime.now().isoformat()}
+            stock_info = {
+                "symbol": symbol,
+                "price": price,
+                "last_updated": datetime.now().isoformat(),
+            }
             profile, financials = {}, {}
 
             # Try Finnhub API
             try:
                 profile = self.finnhub_client.company_profile2(symbol=symbol)
-                financials = self.finnhub_client.company_basic_financials(symbol=symbol, metric="all")
+                financials = self.finnhub_client.company_basic_financials(
+                    symbol=symbol, metric="all"
+                )
             except Exception as e:
-                logger.warning(f"Finnhub profile/financials fetch failed for {symbol}: {e}")
+                logger.warning(
+                    f"Finnhub profile/financials fetch failed for {symbol}: {e}"
+                )
 
             # Try YFinance fallback
             try:
                 info = await self._fetch_yf_data(symbol, "info")
                 history = await self.get_stock_price_history(symbol, period="1mo")
 
-                stock_info.update({
-                    "company_name": profile.get("name", info.get("longName", "")),
-                    "market_cap": profile.get("marketCapitalization", info.get("marketCap", 0)),
-                    "pe_ratio": financials.get("metric", {}).get("peBasicExclExtraTTM", info.get("trailingPE", 0)),
-                    "sector": profile.get("finnhubIndustry", info.get("sector", "N/A")),
-                    "exchange": profile.get("exchange", info.get("exchange", "N/A")),
-                    "currency": profile.get("currency", "USD"),
-                    "fifty_two_week_high": financials.get("metric", {}).get("52WeekHigh", info.get("fiftyTwoWeekHigh", 0)),
-                    "fifty_two_week_low": financials.get("metric", {}).get("52WeekLow", info.get("fiftyTwoWeekLow", 0)),
-                    "price_history": history,
-                    "website": profile.get("weburl", info.get("website", "")),
-                    "description": profile.get("description", info.get("longBusinessSummary", "")),
-                    "volume": info.get("volume", 0),
-                })
+                stock_info.update(
+                    {
+                        "company_name": profile.get("name", info.get("longName", "")),
+                        "market_cap": profile.get(
+                            "marketCapitalization", info.get("marketCap", 0)
+                        ),
+                        "pe_ratio": financials.get("metric", {}).get(
+                            "peBasicExclExtraTTM", info.get("trailingPE", 0)
+                        ),
+                        "sector": profile.get(
+                            "finnhubIndustry", info.get("sector", "N/A")
+                        ),
+                        "exchange": profile.get(
+                            "exchange", info.get("exchange", "N/A")
+                        ),
+                        "currency": profile.get("currency", "USD"),
+                        "fifty_two_week_high": financials.get("metric", {}).get(
+                            "52WeekHigh", info.get("fiftyTwoWeekHigh", 0)
+                        ),
+                        "fifty_two_week_low": financials.get("metric", {}).get(
+                            "52WeekLow", info.get("fiftyTwoWeekLow", 0)
+                        ),
+                        "price_history": history,
+                        "website": profile.get("weburl", info.get("website", "")),
+                        "description": profile.get(
+                            "description", info.get("longBusinessSummary", "")
+                        ),
+                        "volume": info.get("volume", 0),
+                    }
+                )
             except Exception as e:
                 logger.error(f"YFinance fallback failed for {symbol}: {e}")
 
@@ -777,7 +815,9 @@ class StockMarketService:
             logger.error(f"Failed to fetch stock info for {symbol}: {e}")
             return None
 
-    async def get_market_news(self, category: str = "general", min_id: int = 0) -> List[Dict]:
+    async def get_market_news(
+        self, category: str = "general", min_id: int = 0
+    ) -> List[Dict]:
         """Fetch general market news from Finnhub."""
         try:
             news = self.finnhub_client.general_news(category=category, min_id=min_id)
@@ -796,8 +836,9 @@ class StockMarketService:
             logger.error(f"Error fetching market news: {e}")
             return []
 
-        
+
 stock_service = StockMarketService(finnhub_api_key=os.getenv("FINNHUB_API_KEY"))
+
 
 @app.route("/dashboard")
 @login_required
@@ -842,7 +883,6 @@ async def dashboard():
                     "profit_loss_percent": (
                         (current_price - avg_price) / avg_price * 100
                     ).quantize(Decimal("0.01")),
-                    
                     # New enhanced stock information from StockMarketService
                     "company_name": stock_info.get("company_name", symbol),
                     "sector": stock_info.get("sector", "N/A"),
@@ -850,18 +890,14 @@ async def dashboard():
                     "market_cap": stock_info.get("market_cap", 0),
                     "exchange": stock_info.get("exchange", "N/A"),
                     "currency": stock_info.get("currency", "USD"),
-                    
                     # Additional financial metrics
                     "fifty_two_week_high": stock_info.get("fifty_two_week_high", 0),
                     "fifty_two_week_low": stock_info.get("fifty_two_week_low", 0),
-                    
                     # Detailed price history
                     "price_history": stock_info.get("price_history", []),
-                    
                     # Company description and website
                     "description": stock_info.get("description", ""),
                     "website": stock_info.get("website", ""),
-                    
                     # Volume and last updated timestamp
                     "volume": stock_info.get("volume", 0),
                     "last_updated": stock_info.get("last_updated", datetime.now()),
@@ -896,6 +932,7 @@ async def dashboard():
         account_type=current_user.account_type,
     )
 
+
 @app.route("/get_stock_info/<symbol>")
 @login_required
 @async_route
@@ -929,7 +966,9 @@ async def buy_stock():
 
     # Verify current price
     current_price = await stock_service.get_stock_price(symbol)
-    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal("0.02"):
+    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal(
+        "0.02"
+    ):
         return jsonify(
             {
                 "success": False,
@@ -969,11 +1008,17 @@ async def buy_stock():
                 {
                     "$set": {
                         f"portfolio.{symbol}": {
-                            "shares": float(total_shares),  # Convert to float for MongoDB
-                            "avg_price": float(new_avg_price),  # Convert to float for MongoDB
+                            "shares": float(
+                                total_shares
+                            ),  # Convert to float for MongoDB
+                            "avg_price": float(
+                                new_avg_price
+                            ),  # Convert to float for MongoDB
                             "last_updated": datetime.now(),
                         },
-                        "balance": float(current_balance - total_cost),  # Convert to float for MongoDB
+                        "balance": float(
+                            current_balance - total_cost
+                        ),  # Convert to float for MongoDB
                     },
                     "$push": {
                         "trade_history": {
@@ -1018,7 +1063,9 @@ async def sell_stock():
 
     # Verify current price
     current_price = await stock_service.get_stock_price(symbol)
-    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal("0.02"):
+    if not current_price or abs(Decimal(str(current_price)) - price) / price > Decimal(
+        "0.02"
+    ):
         return jsonify(
             {
                 "success": False,
@@ -1089,6 +1136,7 @@ async def sell_stock():
         }
     )
 
+
 @app.route("/trade_history")
 @login_required
 @handle_errors
@@ -1117,6 +1165,7 @@ def trade_history():
         has_prev=page > 1,
         has_next=page < total_pages,
     )
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=8080, host="0.0.0.0")
